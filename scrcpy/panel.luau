@@ -47,6 +47,12 @@ local function sessionRows(sessions)
                 S.value(session.kind or "mirror"),
                 ui.spacer({ flexGrow = 1 }),
                 S.micro(session.state or "?", T.color.muted, 56),
+                ui.button({
+                    text = "STOP",
+                    variant = "outline",
+                    controlSize = "sm",
+                    onClick = function() S.send("stop", { id = session.id }) end,
+                }),
             }),
             S.errorLine(session.error),
         }))
@@ -124,6 +130,28 @@ local function render()
 
         S.sectionRule(),
         S.micro(T.copy.sessions),
+        ui.row({ gap = 6, align = "center" }, {
+            ui.button({
+                text = "START",
+                variant = "primary",
+                controlSize = "sm",
+                onClick = function() S.send("start", { kind = "mirror" }) end,
+            }),
+            ui.button({
+                text = "RECORD",
+                variant = "outline",
+                controlSize = "sm",
+                onClick = function() S.send("start-recording") end,
+            }),
+            ui.button({
+                text = "CAMERA",
+                variant = "outline",
+                controlSize = "sm",
+                onClick = function()
+                    S.send("start", { kind = "camera", settings = { video_source = "camera" } })
+                end,
+            }),
+        }),
         ui.column({ gap = T.layout.rowGap }, sessionRows(sessions)),
 
         S.sectionRule(),
