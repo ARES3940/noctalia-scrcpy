@@ -223,6 +223,10 @@ function M.run()
     check("dedupes mDNS and ip serials", #merged == 2)
     check("prefers ip:port serial", merged[1].serial == "192.168.0.11:38377")
     check("attaches endpoint from mdns", merged[1].endpoint == "192.168.0.11:38377")
+    check("picks the selected serial", D.pick(merged, merged[1].serial).serial == merged[1].serial)
+    check("picks a ready fallback", D.pick(merged, "").state == "device")
+    check("stale selection is not swapped", D.pick(merged, "192.168.0.99:5555") == nil)
+    check("unpacked device is not ready", not D.isReady({ state = "offline" }))
 
     -- Capability gating ----------------------------------------------------
     local G = require("./gating.luau")
@@ -244,6 +248,22 @@ function M.run()
     check("camera blocked below Android 12", old.video_source ~= nil)
     check("virtual display blocked below Android 14", old.new_display ~= nil)
     check("everything blocked without adb", G.evaluate(caps({ adb = false })).all ~= nil)
+    check("missing device marked separately", G.evaluate(caps({ deviceSelected = false })).device ~= nil)
+
+    -- Launch validation -----------------------------------------------------
+    local function vsettings(overrides)
+        local s = base()
+        for k, v in pairs(overrides or {}) do s[k] = v end
+        return s
+    end
+    local vcaps = caps()
+    check("valid launch passes", #G.validate(vsettings(), vcaps, "192.168.0.11:38017") == 0)
+    check("launch needs a serial", #G.validate(vsettings(), vcaps, "") == 1)
+    check("OTG rejected over wifi", #G.validate(vsettings({ otg = true }), caps({ wireless = true }), "wifi") == 1)
+    check("AOA rejected over wifi", #G.validate(vsettings({ keyboard_mode = "aoa" }), caps({ wireless = true }), "wifi") == 1)
+    check("AOA allowed over USB", #G.validate(vsettings({ keyboard_mode = "aoa" }), caps({ wireless = false }), "usb") == 0)
+    check("v4l2 rejected without loopback", #G.validate(vsettings({ v4l2_enabled = true }), caps({ v4l2Writable = false }), "wifi") == 1)
+    check("camera rejected on Android 11", #G.validate(vsettings({ video_source = "camera" }), caps({ androidSdk = 30 }), "wifi") == 1)
 
     return passed, failed, failures
 end

@@ -12,60 +12,78 @@ T.font = {
 
 T.size = {
     panelTitle = 14,
-    section = 10,
+    subtitle = 10.5,
+    section = 9.5,
     body = 12,
-    micro = 10,
+    micro = 9.5,
     value = 11,
-    barLabel = 10.5,
-    dot = 6,
+    barLabel = 10,
+    icon = 14,
+    dot = 5,
     accentWidth = 2,
-    accentHeight = 14,
-    radius = 3,
+    accentHeight = 16,
+    radius = 6,
+    cardRadius = 5,
+    pillRadius = 4,
 }
 
 T.color = {
     text = "on_surface",
     muted = "on_surface_variant",
     accent = "primary",
-    cardFill = "surface_container/0.88",
-    cardBorder = "on_surface/0.16",
+    card = "surface_container/0.55",
+    cardBorder = "outline_variant/0.35",
+    overlay = "surface_container_high/0.45",
     track = "on_surface/0.10",
     error = "error",
     success = "tertiary",
+    warning = "secondary",
+}
+
+T.tone = {
+    info = "primary",
+    success = "tertiary",
+    warning = "secondary",
+    error = "error",
 }
 
 T.layout = {
-    panelGap = 8,
-    cardGap = 6,
+    panelGap = 10,
+    panelPadding = 12,
+    cardGap = 7,
     cardPadding = 10,
-    sectionGap = 4,
-    labelWidth = 96,
-    rowGap = 6,
+    rowGap = 4,
+    labelWidth = 100,
+    valueWidth = 76,
 }
 
 T.copy = {
-    panelTitle = "SCRCPY",
-    subtitle = "WIRELESS ADB",
-    noDevices = "No devices — open pairing to add one",
+    title = "SCRCPY",
+    noDevice = "No device selected",
+    noDevices = "No devices found",
     devices = "DEVICES",
     sessions = "SESSIONS",
-    pairing = "PAIRING",
     presets = "PRESETS",
+    pairing = "PAIR A NEW PHONE",
+    remembered = "REMEMBERED",
+    features = "FEATURES",
     noSessions = "No active sessions",
-    connecting = "CONNECTING",
-    refresh = "REFRESH",
-    pair = "PAIR",
     stop = "STOP",
-    start = "START",
-    openSettings = "SETTINGS",
-    build = "Scaffold ready",
+    settings = "PLUGIN SETTINGS",
 }
 
 T.status = {
     disconnected = { color = "on_surface_variant", glyph = "device-mobile-off", label = "OFFLINE" },
     connected = { color = "tertiary", glyph = "device-mobile", label = "READY" },
-    mirroring = { color = "primary", glyph = "video", label = "MIRRORING" },
+    mirroring = { color = "primary", glyph = "device-mobile", label = "MIRRORING" },
     recording = { color = "error", glyph = "player-record", label = "REC" },
+}
+
+T.kind = {
+    mirror = { glyph = "device-mobile", label = "MIRROR", color = "primary" },
+    record = { glyph = "player-record", label = "RECORD", color = "error" },
+    camera = { glyph = "camera", label = "CAMERA", color = "primary" },
+    webcam = { glyph = "video", label = "WEBCAM", color = "primary" },
 }
 
 return T

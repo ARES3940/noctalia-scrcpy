@@ -9,7 +9,7 @@ a controller and launcher. scrcpy draws its own native window; the panel never e
 | Field | Value |
 | --- | --- |
 | ID | `omen/scrcpy` |
-| Version | 0.1.0 |
+| Version | 0.2.0 |
 | Plugin API | 53 or newer (Noctalia v5.5.0+) |
 | Entries | Service: `manager`; bar widget: `bar`; panels: `panel`, `quick`; shortcut: `toggle` |
 | License | MIT |
@@ -27,30 +27,61 @@ a controller and launcher. scrcpy draws its own native window; the panel never e
 
 1. Enable **Scrcpy Control** in *Settings → Plugins* (or
    `noctalia msg plugins enable omen/scrcpy`).
-2. Add **Scrcpy Control → bar** in the bar widget picker. The icon shows one of four states:
-   offline, ready, mirroring, recording.
-3. Click the icon to open the main panel; right-click opens a compact quick-actions panel with
-   START MIRROR, START RECORDING, START LAST SESSION and STOP LAST SESSION. The control-center
-   shortcut `toggle` opens the main panel.
+2. Add **Scrcpy Control → bar** in the bar widget picker. The widget shows one glyph and one of
+   four states: offline, ready, mirroring (with elapsed time), recording (`REC`). Its tooltip lists
+   the state, the selected phone, each active session and any error.
+3. Click the widget to open the main panel; right-click opens the quick-actions panel. The
+   control-center shortcut `toggle` starts or stops a mirror in one click and falls back to the
+   panel when no phone is ready.
 4. Open the panels directly with:
 
 ```sh
-noctalia msg panel-toggle omen/scrcpy:panel
-noctalia msg panel-toggle omen/scrcpy:quick
+noctalia msg panel-open omen/scrcpy:panel
+noctalia msg panel-open omen/scrcpy:quick
 ```
+
+### Main panel
+
+The panel is 420 × 600 and has three tabs:
+
+| Tab | What it holds |
+| --- | --- |
+| **Control** | Selected phone, `START MIRROR`, `REC`, `CAMERA`, `WEBCAM`, record-while-mirroring, restart last session, live sessions with elapsed time and stop, presets, and a two-line summary of the session defaults |
+| **Devices** | Connected devices with `USE` / `CONNECT` / `MIRROR`, the pairing form, a manual `ip:port` connect, and remembered devices with forget |
+| **Settings** | Video, audio, recording, display, input and screen, camera and webcam, window options, an **Advanced** disclosure (buffers, encoder, virtual-display DPI, OTG, window size, orientation), the exact command preview, and reset-overrides |
+
+Edits apply to sessions started from then on. A preset fills the overrides in one click; the
+selected preset is highlighted and turns into `CUSTOM` after a manual edit. All overrides are
+saved to the plugin data directory (debounced), not to the Noctalia settings file.
+
+### Device selection
+
+- The only ready phone is selected automatically.
+- The selection is stored in `selection.json` together with the phone's `product`, because wireless
+  debugging changes the `ip:port` on every reconnect. When the saved serial disappears, the panel
+  matches the same `product` on the new port and shows a "reconnected on a new port" notice.
+- Sessions, the bar and the quick panel all read the same selection, so they agree on the phone.
+
+### Recording
+
+`REC` starts a record-only session: scrcpy writes the file without opening a window
+(`--no-playback --no-window`). Recordings go to `record_dir` (`~/Videos` by default); `~` is expanded
+by the service, and the directory is created if needed. Files are named
+`scrcpy-<session-id>.<format>`. The finished path is shown in the session row and the bar tooltip.
 
 ### Pairing a phone over wifi
 
 1. On the phone: *Developer options → Wireless debugging → Pair device with pairing code*.
-2. In the panel, open **PAIR**, enter the `ip:port` shown by the phone and the 6-digit pairing code,
-   then submit. The plugin runs `adb pair <ip:port> <code>`.
+2. In the panel's **Devices** tab, enter the `ip:port` shown by the phone and the 6-digit pairing
+   code, then press **PAIR**. The plugin runs `adb pair <ip:port> <code>`.
 3. In *Wireless debugging* on the phone, read the connection port (different from the pairing port).
-   The panel's device list discovers it with `adb mdns services` while the panel is open, and connecting
-   runs `adb connect <ip:port>`.
-4. If wireless debugging was toggled off and on, the port changes. The panel detects the stale serial,
-   re-runs mdns discovery and offers **Reconnect**.
+   The device list discovers it with `adb mdns services` while the panel is open; **CONNECT** runs
+   `adb connect <ip:port>`.
+4. If wireless debugging was toggled off and on, the port changes. The saved serial is matched by
+   the phone's `product` name, so the panel re-selects the same phone on its new port and says so.
 5. Known devices are remembered locally. Devices are deduplicated: adb 37 lists an mDNS-discovered
-   phone both as `adb-…._adb-tls-connect._tcp` and as `ip:port` after `adb connect`; the panel shows it once.
+   phone both as `adb-…._adb-tls-connect._tcp` and as `ip:port` after `adb connect`; the list shows
+   it once.
 
 ## Feature coverage
 
@@ -74,7 +105,8 @@ is disabled when no writable `/dev/videoN` exists.
 
 ### Presets
 
-`Default`, `Gaming (low latency)`, `Low bandwidth`, `Webcam`, `Record only`.
+`Default`, `Gaming (low latency)`, `Low bandwidth` (labelled **Low data** in the panel),
+`Webcam`, `Record only` (labelled **Record**).
 
 ## Settings
 
@@ -115,12 +147,18 @@ The `manager` service accepts events over the plugin IPC channel:
 
 ```sh
 noctalia msg plugin omen/scrcpy:manager all toggle-panel
+noctalia msg plugin omen/scrcpy:manager all refresh
 noctalia msg plugin omen/scrcpy:manager all start-last
 noctalia msg plugin omen/scrcpy:manager all stop-last
 noctalia msg plugin omen/scrcpy:manager all start-recording
+noctalia msg plugin omen/scrcpy:manager all start '{"kind":"mirror","extras":{"video_source":"camera"}}'
+noctalia msg plugin omen/scrcpy:manager all stop '{"id":"<session-id>"}'
+noctalia msg plugin omen/scrcpy:manager all connect '{"serial":"192.168.0.11:5555"}'
+noctalia msg plugin omen/scrcpy:manager all pair '{"host":"192.168.0.11:37123","code":"123456"}'
 ```
 
-Keybinds can call these directly. `toggle-panel` opens the main panel. The panel and bar also use an
+`start` accepts the same keys a session can override; the payload is JSON or a plain `ip:port`
+string. Keybinds can call these directly. The panel, quick panel, bar and shortcut also use an
 in-process command bus (`noctalia.state`), so no extra process is spawned for UI actions.
 
 ## Performance notes
@@ -131,18 +169,21 @@ in-process command bus (`noctalia.state`), so no extra process is spawned for UI
 
 ## Notes
 
-- **Processes:** the service launches scrcpy detached and records its PID in a private data directory.
+- **Processes:** the service launches scrcpy detached with an argv array (never a shell string) and
+  records its PID in a private data directory.
   Stopping a session sends `SIGTERM` to that PID, escalating to `SIGKILL` if needed. Only sessions
   owned by this plugin are stopped. A Noctalia `SIGKILL` cannot run cleanup; in that rare case use
   `pkill -f noctalia-scrcpy` to clear leftovers.
-- **Files:** overrides, known devices, PID files and per-session logs live in Noctalia's per-plugin
-  data directory. Pairing codes are passed as command arguments and are never stored.
+- **Files:** overrides, known devices, the current selection, PID files and per-session logs live in
+  Noctalia's per-plugin data directory. Pairing codes are passed as command arguments and are never
+  stored.
 - **Network:** `adb pair/connect/mdns` talks only to the local phone. No cloud calls, analytics or
   remote downloads. Discovery polls adb only while the panel is open.
 - **Multiple sessions:** each launch is an independent process that can be stopped separately, for
   example a mirror plus a camera session.
-- **Errors:** a failed scrcpy launch surfaces the last line of its log (`device unauthorized`, stale
-  port, codec failure, and so on).
+- **Errors:** a failed scrcpy launch surfaces the `ERROR:` line of its log (`device unauthorized`,
+  stale port, codec failure, and so on) in a notice and on the session row; successful stops end as
+  `stopped`, not `error`.
 
 ### Optional Hyprland window rules (documented, not applied)
 

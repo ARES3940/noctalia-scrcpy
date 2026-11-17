@@ -1,47 +1,100 @@
 --!nonstrict
--- omen/scrcpy bar widget: one state icon, tooltip with details.
+-- omen/scrcpy bar widget: one status glyph, REC or a session count, and a
+-- tooltip with the details. Left click opens the full panel, right click the
+-- quick-actions panel.
+
 local S = require("./lib/shared.luau")
 local T = S.T
 
-local function currentState(sessions, devices)
-    local hasDevice = false
-    for _, device in pairs(devices or {}) do
-        if device.state == "device" then hasDevice = true end
-    end
-    for _, session in pairs(sessions or {}) do
-        if session.state == "running" or session.state == "starting" then
-            if session.kind == "record" then return "recording" end
-            return "mirroring"
+local function read()
+    local sessions = noctalia.state.get("sessions") or {}
+    local devices = noctalia.state.get("devices") or {}
+    local selected = tostring(noctalia.state.get("selected") or "")
+    return S.statusOf(sessions, selected, devices), sessions, devices, selected
+end
+
+local function deviceLabel(devices, selected)
+    for _, device in ipairs(devices) do
+        if device.serial == selected then
+            if device.model and device.model ~= "" then return device.model end
+            return device.serial
         end
     end
-    if hasDevice then return "connected" end
-    return "disconnected"
+    return "No device"
+end
+
+local function tooltipRows(state, sessions, devices, selected)
+    local def = S.statusDef(state)
+    local rows = {
+        { key = "State", value = def.label },
+        { key = "Device", value = deviceLabel(devices, selected) },
+    }
+
+    local active = S.activeSessions(sessions)
+    if #active > 0 then
+        rows[#rows + 1] = { key = "Sessions", value = tostring(#active) }
+        for _, session in ipairs(active) do
+            local kind = string.upper(session.mode or (session.recordFile and "record" or session.kind or "mirror"))
+            local detail = kind .. " · " .. S.elapsed(session.startedAt)
+            if session.recordFile then detail = detail .. " · REC" end
+            rows[#rows + 1] = { key = session.state == "starting" and "Starting" or "Running", value = detail }
+        end
+        local last = active[#active]
+        if last and last.recordFile then
+            rows[#rows + 1] = { key = "Recording", value = last.recordFile }
+        end
+    end
+
+    for _, session in ipairs(sessions) do
+        if session.error then
+            rows[#rows + 1] = { key = "Error", value = session.error }
+        end
+    end
+
+    return rows
 end
 
 local function render()
-    local sessions = noctalia.state.get("sessions") or {}
-    local devices = noctalia.state.get("devices") or {}
-    local state = currentState(sessions, devices)
+    local state, sessions, devices, selected = read()
     local def = S.statusDef(state)
+    local active = S.activeSessions(sessions)
+    local vertical = barWidget.isVertical()
 
-    local container = barWidget.isVertical() and ui.column or ui.row
-    barWidget.render(container({ gap = 4, align = "center" }, {
-        ui.glyph({ name = def.glyph, size = 14, color = def.color }),
-        ui.label({
-            text = T.copy.panelTitle,
+    local children = {
+        ui.glyph({ name = def.glyph, size = T.size.icon, color = def.color }),
+    }
+
+    if #active > 1 then
+        children[#children + 1] = ui.label({
+            text = tostring(#active),
+            fontSize = T.size.barLabel,
+            fontFamily = T.font.value,
+            fontWeight = "bold",
+            color = def.color,
+            maxLines = 1,
+        })
+    elseif state == "recording" and not vertical then
+        children[#children + 1] = ui.label({
+            text = "REC",
             fontSize = T.size.barLabel,
             fontFamily = T.font.label,
             fontWeight = "bold",
+            color = def.color,
+            maxLines = 1,
+        })
+    elseif state == "mirroring" and not vertical then
+        children[#children + 1] = ui.label({
+            text = S.elapsed(active[1] and active[1].startedAt),
+            fontSize = T.size.barLabel,
+            fontFamily = T.font.value,
             color = T.color.muted,
-        }),
-    }))
-
-    local rows = { { "STATE", def.label }, { "DEVICES", tostring(type(devices) == "table" and #devices or 0) } }
-    for _, session in pairs(sessions) do
-        table.insert(rows, { "SESSION", tostring(session.kind or "mirror") .. " " .. tostring(session.state or "?") })
-        if session.error then table.insert(rows, { "ERROR", tostring(session.error) }) end
+            maxLines = 1,
+        })
     end
-    barWidget.setTooltip(rows)
+
+    local container = vertical and ui.column or ui.row
+    barWidget.render(container({ gap = 4, align = "center" }, children))
+    barWidget.setTooltip(tooltipRows(state, sessions, devices, selected))
 end
 
 function update()
@@ -52,9 +105,8 @@ function onClick()
     noctalia.togglePanel("omen/scrcpy:panel")
 end
 
--- Right-click opens a compact quick-actions panel. panel.openContextMenu() is
--- panel-only in the Noctalia API, so a second small panel is the supported way
--- to offer quick actions from a bar widget.
+-- A right-click quick panel replaces panel.openContextMenu(), which only works
+-- from a panel's own pointer callback.
 function onRightClick()
     noctalia.togglePanel("omen/scrcpy:quick")
 end
@@ -62,4 +114,6 @@ end
 noctalia.setUpdateInterval(1000)
 noctalia.state.watch("sessions", render)
 noctalia.state.watch("devices", render)
+noctalia.state.watch("selected", render)
+noctalia.state.watch("notice", render)
 render()

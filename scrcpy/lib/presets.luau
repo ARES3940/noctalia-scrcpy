@@ -5,6 +5,16 @@ local M = {}
 
 M.order = { "Default", "Gaming", "Low bandwidth", "Webcam", "Record only" }
 
+-- Panel buttons are narrow; keep the preset's real name for the tooltip.
+M.short = {
+    ["Low bandwidth"] = "Low data",
+    ["Record only"] = "Record",
+}
+
+function M.label(name)
+    return M.short[name] or name
+end
+
 M.presets = {
     Default = {},
 

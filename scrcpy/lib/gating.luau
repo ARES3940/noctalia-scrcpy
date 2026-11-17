@@ -24,7 +24,7 @@ function M.evaluate(caps)
         return blocked, hints
     end
     if caps.deviceSelected == false then
-        blocked.all = "No device selected"
+        blocked.device = "No device ready"
         return blocked, hints
     end
 
@@ -60,6 +60,50 @@ function M.evaluate(caps)
     end
 
     return blocked, hints
+end
+
+--- Last-line validation before a launch. Unlike evaluate(), which disables
+-- controls, this rejects an actual settings snapshot; it also catches stale
+-- overrides and values typed into the manifest settings view.
+--- @param settings table effective settings
+--- @param caps table capability snapshot
+--- @param serial string? selected adb serial
+--- @return { string } problems (empty when the launch may proceed)
+function M.validate(settings, caps, serial)
+    settings = settings or {}
+    caps = caps or {}
+    local out = {}
+    local function add(message)
+        out[#out + 1] = message
+    end
+
+    if caps.adb == false then add("adb not found — install android-tools") end
+    if caps.scrcpy == false then add("scrcpy not found — install scrcpy") end
+    if serial == nil or serial == "" then add("No device ready — select one in Devices") end
+
+    if caps.wireless == true then
+        if settings.otg == true then add("OTG needs a USB connection") end
+        local labels = { keyboard_mode = "Keyboard", mouse_mode = "Mouse", gamepad_mode = "Gamepad" }
+        for _, field in ipairs({ "keyboard_mode", "mouse_mode", "gamepad_mode" }) do
+            if settings[field] == "aoa" then
+                add(labels[field] .. " AOA mode needs USB — use SDK or UHID")
+            end
+        end
+    end
+
+    if settings.v4l2_enabled == true and caps.v4l2Writable ~= true then
+        add("No writable V4L2 loopback device")
+    end
+
+    local sdk = tonumber(caps.androidSdk) or 0
+    if settings.video_source == "camera" and sdk > 0 and sdk < 31 then
+        add("Camera mirroring needs Android 12+")
+    end
+    if settings.new_display == true and sdk > 0 and sdk < 34 then
+        add("Virtual display needs Android 14+")
+    end
+
+    return out
 end
 
 return M
