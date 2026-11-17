@@ -1,9 +1,12 @@
 --!nonstrict
--- omen/scrcpy panel. Session 1 scaffold: themed layout, real state wiring.
--- Sessions 3-6 fill the device list, pairing form, toggles and presets.
+-- omen/scrcpy panel: devices, pairing, sessions and an argv preview.
 local S = require("./lib/shared.luau")
 local T = S.T
 local A = require("./lib/args.luau")
+local Devices = require("./lib/devices.luau")
+
+local pairHost = ""
+local pairCode = ""
 
 local function deviceRows(devices)
     if type(devices) ~= "table" or #devices == 0 then
@@ -11,12 +14,21 @@ local function deviceRows(devices)
     end
     local rows = {}
     for _, device in ipairs(devices) do
+        local state = device.state == "device" and "connected" or "disconnected"
         table.insert(rows, S.card({
             ui.row({ gap = 6, align = "center" }, {
-                S.dot("connected"),
-                S.value(device.label or device.serial or "device"),
-                ui.spacer({ flexGrow = 1 }),
-                S.micro(device.state or "device", T.color.muted, 56),
+                S.dot(state),
+                ui.column({ gap = 1, flexGrow = 1 }, {
+                    S.value(Devices.label(device)),
+                    S.micro(device.wireless and "WIRELESS" or "USB", T.color.muted),
+                }),
+                ui.button({
+                    text = "USE",
+                    variant = "outline",
+                    controlSize = "sm",
+                    enabled = device.state == "device",
+                    onClick = function() S.send("connect", { serial = device.serial }) end,
+                }),
             }),
         }))
     end
@@ -82,13 +94,32 @@ local function render()
                 controlSize = "sm",
                 onClick = function() S.send("refresh") end,
             }),
+            ui.spacer({ flexGrow = 1 }),
+        }),
+
+        S.sectionRule(),
+        S.micro(T.copy.pairing),
+        S.card({
+            ui.input({
+                key = "pair-host",
+                value = pairHost,
+                placeholder = "192.168.0.11:38377",
+                controlSize = "sm",
+                onChange = function(value) pairHost = value end,
+            }),
+            ui.input({
+                key = "pair-code",
+                value = pairCode,
+                placeholder = "123456",
+                controlSize = "sm",
+                onChange = function(value) pairCode = value end,
+            }),
             ui.button({
                 text = T.copy.pair,
-                variant = "outline",
+                variant = "primary",
                 controlSize = "sm",
-                onClick = function() S.send("pair-dialog") end,
+                onClick = function() S.send("pair", { host = pairHost, code = pairCode }) end,
             }),
-            ui.spacer({ flexGrow = 1 }),
         }),
 
         S.sectionRule(),
@@ -108,7 +139,6 @@ local function render()
         }),
         S.errorLine(notice),
         S.sectionRule(),
-        S.micro(T.copy.build, T.color.muted),
         ui.button({
             text = T.copy.openSettings,
             variant = "ghost",
@@ -136,7 +166,7 @@ function onClose()
     S.send("panel-close")
 end
 
-noctalia.state.watch("sessions", render)
 noctalia.state.watch("devices", render)
+noctalia.state.watch("sessions", render)
 noctalia.state.watch("notice", render)
 render()
