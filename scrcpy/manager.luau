@@ -11,6 +11,7 @@
 --   hints        key -> hint (control stays usable)
 --   notice       { text, tone, seq } or nil
 --   hasLast      whether "start last session" can do anything
+--   preview      embedded preview state (socket, size, session, error)
 --
 -- Entries talk to this service through the "cmd" state key (see lib/shared.luau)
 -- or through `noctalia msg plugin omen/scrcpy:manager all <event> [payload]`.
@@ -43,8 +44,15 @@ local lastSdkSerial, lastSdkAt = "", 0
 local caps = {
     adb = false, scrcpy = false, wireless = true,
     androidSdk = 0, v4l2Writable = false, deviceSelected = false,
+    python3 = false, ffmpeg = false,
 }
 local panelOpen = false
+local screenOpen = false
+local preview = {
+    active = false, socket = "", width = 320, height = 640, fps = 30,
+    sessionId = "", serial = "", screenW = 1080, screenH = 2340,
+    pid = nil, pidPath = nil, logPath = nil, killAt = 0, error = "",
+}
 local discovering = false
 local lastDiscover = 0
 local DISCOVER_OPEN_MS = 3000
@@ -66,6 +74,7 @@ local function publish()
     noctalia.state.set("sessions", sessions)
     noctalia.state.set("known", known)
     noctalia.state.set("panelOpen", panelOpen)
+    noctalia.state.set("screenOpen", screenOpen)
     noctalia.state.set("effective", effective())
     noctalia.state.set("capabilities", caps)
     noctalia.state.set("blocked", blocked)
@@ -73,6 +82,7 @@ local function publish()
     noctalia.state.set("activePreset", activePreset)
     noctalia.state.set("notice", notice)
     noctalia.state.set("hasLast", hasLast)
+    noctalia.state.set("preview", preview)
 end
 
 local function setNotice(text, tone, sticky)
@@ -234,6 +244,8 @@ end
 local function refreshCapabilities(forceSdk)
     caps.adb = noctalia.commandExists("adb")
     caps.scrcpy = noctalia.commandExists("scrcpy")
+    caps.python3 = noctalia.commandExists("python3")
+    caps.ffmpeg = noctalia.commandExists("ffmpeg")
     local device = resolveSelected()
     caps.deviceSelected = device ~= nil and device.state == "device"
     local serial = device and device.serial or ""
@@ -497,6 +509,237 @@ local function lastActive()
     return nil
 end
 
+-- ── embedded preview ─────────────────────────────────────────────────────────
+
+local function previewSize()
+    local eff = effective()
+    local w = math.floor(tonumber(eff.preview_width) or 320)
+    local h = math.floor(tonumber(eff.preview_height) or 640)
+    w = math.max(160, math.min(480, w))
+    h = math.max(320, math.min(720, h))
+    if w % 2 ~= 0 then w = w - 1 end
+    if h % 2 ~= 0 then h = h - 1 end
+    return w, h
+end
+
+local function probeScreen(serial)
+    if serial == nil or serial == "" then return end
+    noctalia.runAsync({ "adb", "-s", serial, "shell", "wm", "size" }, function(result)
+        if result.exitCode ~= 0 then return end
+        local w, h = tostring(result.stdout or ""):match("(%d+)x(%d+)")
+        if not w then return end
+        preview.screenW = tonumber(w) or preview.screenW
+        preview.screenH = tonumber(h) or preview.screenH
+        publish()
+    end)
+end
+
+local function startPreviewCompanion(session)
+    if not dataDir then
+        preview.error = "No plugin data directory"
+        publish()
+        return false
+    end
+    local width, height = previewSize()
+    local fps = math.floor(tonumber(effective().preview_fps) or 30)
+    fps = math.max(1, math.min(60, fps))
+    local stamp = session.id
+    preview.socket = dataDir .. "/preview-" .. stamp .. ".sock"
+    preview.pidPath = dataDir .. "/preview-" .. stamp .. ".pid"
+    preview.logPath = dataDir .. "/preview-" .. stamp .. ".log"
+    preview.width, preview.height, preview.fps = width, height, fps
+    preview.sessionId = session.id
+    preview.serial = session.serial
+    preview.error = ""
+    preview.active = true
+    preview.killAt = 0
+
+    local script = (noctalia.pluginDir() or "") .. "/preview.py"
+    local shim = 'pid=$1; log=$2; shift 2; echo $$ > "$pid"; exec "$@" > "$log" 2>&1'
+    local cmd = {
+        "sh", "-c", shim, "noctalia-scrcpy-preview", preview.pidPath, preview.logPath,
+        "python3", script, preview.socket, tostring(width), tostring(height), tostring(fps),
+        tostring(effective().v4l2_sink or "/dev/video10"),
+    }
+    if not noctalia.runAsync(cmd) then
+        preview.error = "Could not start the preview companion (process limit?)"
+        preview.active = false
+        publish()
+        return false
+    end
+    publish()
+    return true
+end
+
+local function stopPreviewCompanion(hard)
+    if not preview.active and not preview.pid then return end
+    if preview.pid then signal(preview.pid, hard and "KILL" or "TERM") end
+    if hard then
+        preview.active = false
+        if preview.pidPath then noctalia.removeFile(preview.pidPath) end
+        preview.pid = nil
+        preview.killAt = 0
+    else
+        preview.killAt = noctalia.nowMs() + KILL_GRACE_MS
+    end
+    publish()
+end
+
+local function stopEmbedded(hard)
+    local session = findSession(preview.sessionId)
+    stopPreviewCompanion(hard)
+    if session then stopSession(session, hard) end
+    if preview.pidPath then noctalia.removeFile(preview.pidPath) end
+    if preview.logPath then noctalia.removeFile(preview.logPath) end
+    if preview.socket then noctalia.removeFile(preview.socket) end
+    preview.sessionId = ""
+    preview.serial = ""
+    preview.socket = ""
+    preview.pidPath = nil
+    preview.logPath = nil
+    preview.active = false
+    preview.error = ""
+    publish()
+end
+
+local function tickPreview()
+    if not preview.active then return end
+    local pid = readPid(preview.pidPath) or preview.pid
+    if pid then preview.pid = pid end
+    if pid and alive(pid) then
+        if preview.killAt > 0 and noctalia.nowMs() >= preview.killAt then
+            stopPreviewCompanion(true)
+        end
+        return
+    end
+    local line = lastLogLine(preview.logPath)
+    preview.error = line or "Preview companion exited"
+    preview.active = false
+    preview.socket = ""
+    if preview.pidPath then noctalia.removeFile(preview.pidPath) end
+    if preview.logPath then noctalia.removeFile(preview.logPath) end
+    if preview.socket then noctalia.removeFile(preview.socket) end
+    preview.pidPath, preview.logPath = nil, nil
+    local session = findSession(preview.sessionId)
+    if session and session.state ~= "stopped" and session.state ~= "error" then
+        stopSession(session, false)
+    end
+    publish()
+end
+
+local function startEmbedded(serial)
+    if preview.active then
+        setNotice("An embedded preview is already running", "warning")
+        return
+    end
+    serial = tostring(serial or "")
+    if serial == "" then serial = selectedSerial() end
+    if serial == "" then autoSelect(); serial = selectedSerial() end
+
+    local problems = {}
+    if caps.adb == false then problems[#problems + 1] = "adb not found" end
+    if caps.scrcpy == false then problems[#problems + 1] = "scrcpy not found" end
+    if caps.python3 == false or caps.ffmpeg == false then
+        problems[#problems + 1] = "Embedded preview needs python3 and ffmpeg"
+    end
+    if caps.v4l2Writable ~= true then
+        problems[#problems + 1] = "No writable V4L2 loopback device"
+    end
+    if serial == "" then problems[#problems + 1] = "No device ready — select one in Devices" end
+    if #problems > 0 then
+        setNotice(table.concat(problems, " · "), "error", true)
+        return
+    end
+
+    local sink = tostring(effective().v4l2_sink or "/dev/video10")
+    local session = startSession("mirror", {
+        v4l2_enabled = true,
+        v4l2_sink = sink,
+        video_source = "display",
+        embedded = true,
+    }, serial)
+    if not session then return end
+    session.embedded = true
+    probeScreen(serial)
+    if not startPreviewCompanion(session) then
+        stopSession(session, true)
+    else
+        setNotice("Embedded preview started · " .. serial, "info")
+        if not screenOpen then noctalia.togglePanel(PLUGIN .. ":screen") end
+    end
+    publish()
+end
+
+local KEYCODES = {
+    back = 4, home = 3, recents = 187, app_switch = 187, overview = 187,
+    up = 19, down = 20, left = 21, right = 22,
+    enter = 66, ["return"] = 66, backspace = 67, delete = 67, del = 67,
+    tab = 61, space = 62, escape = 111, esc = 111,
+    power = 26, volume_up = 24, volume_down = 25,
+    camera = 27, call = 5, endcall = 6,
+}
+
+local function keyCode(value)
+    local name = tostring(value or "")
+    local direct = tonumber(name)
+    if direct then return direct end
+    name = name:lower():gsub("^key", ""):gsub("[^%w_]", "")
+    return KEYCODES[name]
+end
+
+local function point(payload, index)
+    local x = tonumber(payload["x" .. index]) or 0
+    local y = tonumber(payload["y" .. index]) or 0
+    x = math.max(0, math.min(1, x))
+    y = math.max(0, math.min(1, y))
+    return math.floor(x * (preview.screenW - 1)), math.floor(y * (preview.screenH - 1))
+end
+
+local function inputArgv(parts)
+    local serial = preview.serial ~= "" and preview.serial or selectedSerial()
+    if serial == "" then
+        setNotice("Select a device first", "warning")
+        return nil
+    end
+    local argv = { "adb", "-s", serial, "shell", "input" }
+    for _, part in ipairs(parts) do argv[#argv + 1] = tostring(part) end
+    return argv
+end
+
+local function runInput(parts)
+    local argv = inputArgv(parts)
+    if not argv then return end
+    noctalia.runAsync(argv, function(result)
+        if result.exitCode ~= 0 then
+            local text = noctalia.string.trim(result.stderr or result.stdout or "")
+            setNotice("Input failed" .. (text ~= "" and (": " .. text) or ""), "warning")
+        end
+    end)
+end
+
+local function previewText(text)
+    text = tostring(text or "")
+    if text == "" then return end
+    if #text > 512 or text:find("[\r\n]") then
+        setNotice("Preview input accepts a single short line of text", "warning")
+        return
+    end
+    text = text:gsub("%s", "%%s")
+    if not text:match("^[%w%.%_%-%/]+$") then
+        text = "'" .. text:gsub("'", "'\\''") .. "'"
+    end
+    runInput({ "text", text })
+end
+
+local function previewKey(value)
+    local code = keyCode(value)
+    if not code then
+        setNotice("Unsupported preview key: " .. tostring(value), "warning")
+        return
+    end
+    runInput({ "keyevent", tostring(code) })
+end
+
 local function tickSessions()
     local now = noctalia.nowMs()
     local changed = false
@@ -622,6 +865,35 @@ local function dispatch(event, payload)
         local serial = tostring(p.serial or "")
         if serial == "" then serial = selectedSerial() end
         startSession("record", nil, serial)
+    elseif event == "start-embedded" then
+        local serial = tostring(p.serial or "")
+        if serial == "" then serial = selectedSerial() end
+        startEmbedded(serial)
+    elseif event == "preview-open" then
+        screenOpen = true
+        publish()
+    elseif event == "preview-close" then
+        screenOpen = false
+        if preview.active then stopEmbedded(false) end
+        publish()
+    elseif event == "stop-preview" then
+        if preview.active or preview.sessionId ~= "" then
+            stopEmbedded(false)
+        else
+            setNotice("No embedded preview to stop", "warning")
+        end
+    elseif event == "preview-tap" then
+        local x, y = point(p, "")
+        runInput({ "tap", tostring(x), tostring(y) })
+    elseif event == "preview-swipe" then
+        local x1, y1 = point(p, "1")
+        local x2, y2 = point(p, "2")
+        local duration = math.max(50, math.min(3000, tonumber(p.duration) or 120))
+        runInput({ "swipe", tostring(x1), tostring(y1), tostring(x2), tostring(y2), tostring(duration) })
+    elseif event == "preview-text" then
+        previewText(p.text)
+    elseif event == "preview-key" then
+        previewKey(p.key or p.chord)
     elseif event == "start-last" then
         if lastSpec then
             local serial = p.serial and tostring(p.serial) or lastSpec.serial
@@ -712,6 +984,7 @@ function onConfigChanged()
 end
 
 function onExit(_signal, reason)
+    if preview.active then stopEmbedded(true) end
     for _, session in ipairs(sessions) do
         if session.pid then signal(session.pid, "TERM") end
     end
@@ -724,6 +997,7 @@ function update()
     local interval = panelOpen and DISCOVER_OPEN_MS or DISCOVER_IDLE_MS
     if now - lastDiscover >= interval then discover() end
     tickSessions()
+    tickPreview()
     if dirtyAt and now - dirtyAt >= SAVE_DEBOUNCE_MS then saveOverrides() end
     if notice and (notice.expiresAt or 0) > 0 and now > notice.expiresAt then
         notice = nil

@@ -183,6 +183,12 @@ local function header(st)
 
     local trailing = {
         S.pill(def.label, def.color),
+        iconButton("video", "Open embedded preview", function()
+            if noctalia.state.get("screenOpen") ~= true then
+                S.send("preview-open")
+                noctalia.togglePanel("omen/scrcpy:screen")
+            end
+        end),
         iconButton("refresh", "Rescan devices", function()
             S.send("refresh")
         end),
@@ -376,8 +382,10 @@ local function launchCard(st)
         variant = "primary",
         controlSize = "md",
         enabled = canLaunch,
-        tooltip = canLaunch and "Mirror the display in a window" or (blocked.all or blocked.device),
-        onClick = function() launchKind("mirror") end,
+        tooltip = canLaunch and "Mirror the phone inside the embedded preview panel" or (blocked.all or blocked.device),
+        onClick = function()
+            S.send("start-embedded")
+        end,
     })
 
     local function quick(text, glyph, kind, extras, enabled, tooltip)
@@ -394,17 +402,32 @@ local function launchCard(st)
     end
 
     local v4l2Ready = st.caps.v4l2Writable == true
-    local quickRow = ui.row({ gap = 5, align = "stretch" }, {
-        quick("REC", "player-record", "record", nil, canLaunch, "Record only, no window"),
-        quick("CAMERA", "camera", "mirror", { video_source = "camera" },
-            canLaunch and cameraBlocked == nil, cameraBlocked or "Mirror the camera"),
-        quick("WEBCAM", "video", "mirror", {
-            video_source = "camera",
-            v4l2_enabled = true,
-            v4l2_sink = tostring(st.eff.v4l2_sink or "/dev/video10"),
-            no_control = false,
-        }, canLaunch and cameraBlocked == nil and v4l2Ready,
-            (not v4l2Ready and "No writable V4L2 loopback device") or cameraBlocked or "Publish the camera to a V4L2 sink"),
+    local windowButton = ui.button({
+        text = "WINDOW",
+        glyph = "external-link",
+        variant = "default",
+        controlSize = "sm",
+        flexGrow = 1,
+        enabled = canLaunch,
+        tooltip = "Open a native scrcpy window instead of the embedded preview",
+        onClick = function() launchKind("mirror") end,
+    })
+    local quickRow = ui.column({ gap = 5 }, {
+        ui.row({ gap = 5, align = "stretch" }, {
+            quick("REC", "player-record", "record", nil, canLaunch, "Record only, no window"),
+            quick("CAMERA", "camera", "mirror", { video_source = "camera" },
+                canLaunch and cameraBlocked == nil, cameraBlocked or "Mirror the camera"),
+        }),
+        ui.row({ gap = 5, align = "stretch" }, {
+            quick("WEBCAM", "video", "mirror", {
+                video_source = "camera",
+                v4l2_enabled = true,
+                v4l2_sink = tostring(st.eff.v4l2_sink or "/dev/video10"),
+                no_control = false,
+            }, canLaunch and cameraBlocked == nil and v4l2Ready,
+                (not v4l2Ready and "No writable V4L2 loopback device") or cameraBlocked or "Publish the camera to a V4L2 sink"),
+            windowButton,
+        }),
     })
 
     local recordOn = st.eff.record_enabled == true
