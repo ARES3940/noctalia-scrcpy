@@ -16,7 +16,8 @@ scrcpy/                  plugin directory (id: omen/scrcpy, plugin_api 53)
   translations/en.json   setting labels
   manager.luau           service: processes, adb, sessions, IPC
   bar.luau               bar widget
-  panel.luau             panel
+  panel.luau             main panel
+  quick.luau             right-click quick-actions panel
   shortcut.luau          control-center shortcut
   lib/                   pure helpers (args, presets, theme, UI)
 docs/PLAN.md             research findings and session-by-session plan

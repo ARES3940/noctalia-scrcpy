@@ -28,6 +28,17 @@ position = "auto"
 open_near_click = true
 layer = "follow"
 
+[[panel]]
+id = "quick"
+entry = "quick.luau"
+width = 240
+height = "content"
+max_height = 360
+placement = "floating"
+position = "auto"
+open_near_click = true
+layer = "follow"
+
 [[shortcut]]
 id = "toggle"
 entry = "shortcut.luau"

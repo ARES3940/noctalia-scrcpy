@@ -4,11 +4,17 @@ local S = require("./lib/shared.luau")
 local T = S.T
 
 local function currentState(sessions, devices)
-    for _, session in pairs(sessions or {}) do
-        if session.state == "recording" then return "recording" end
-        if session.state == "running" or session.state == "starting" then return "mirroring" end
+    local hasDevice = false
+    for _, device in pairs(devices or {}) do
+        if device.state == "device" then hasDevice = true end
     end
-    if type(devices) == "table" and #devices > 0 then return "connected" end
+    for _, session in pairs(sessions or {}) do
+        if session.state == "running" or session.state == "starting" then
+            if session.kind == "record" then return "recording" end
+            return "mirroring"
+        end
+    end
+    if hasDevice then return "connected" end
     return "disconnected"
 end
 
@@ -46,9 +52,11 @@ function onClick()
     noctalia.togglePanel("omen/scrcpy:panel")
 end
 
--- Session 7 replaces this with a native context menu of quick actions.
+-- Right-click opens a compact quick-actions panel. panel.openContextMenu() is
+-- panel-only in the Noctalia API, so a second small panel is the supported way
+-- to offer quick actions from a bar widget.
 function onRightClick()
-    noctalia.togglePanel("omen/scrcpy:panel")
+    noctalia.togglePanel("omen/scrcpy:quick")
 end
 
 noctalia.setUpdateInterval(1000)

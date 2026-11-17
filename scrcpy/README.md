@@ -11,7 +11,7 @@ a controller and launcher. scrcpy draws its own native window; the panel never e
 | ID | `omen/scrcpy` |
 | Version | 0.1.0 |
 | Plugin API | 53 or newer (Noctalia v5.5.0+) |
-| Entries | Service: `manager`; bar widget: `bar`; panel: `panel`; shortcut: `toggle` |
+| Entries | Service: `manager`; bar widget: `bar`; panels: `panel`, `quick`; shortcut: `toggle` |
 | License | MIT |
 
 ## Requirements
@@ -29,12 +29,14 @@ a controller and launcher. scrcpy draws its own native window; the panel never e
    `noctalia msg plugins enable omen/scrcpy`).
 2. Add **Scrcpy Control → bar** in the bar widget picker. The icon shows one of four states:
    offline, ready, mirroring, recording.
-3. Click the icon to open the panel; right-click opens the same panel for now (quick actions arrive in
-   a later session). The control-center shortcut `toggle` opens it too.
-4. Open the panel directly with:
+3. Click the icon to open the main panel; right-click opens a compact quick-actions panel with
+   START MIRROR, START RECORDING, START LAST SESSION and STOP LAST SESSION. The control-center
+   shortcut `toggle` opens the main panel.
+4. Open the panels directly with:
 
 ```sh
 noctalia msg panel-toggle omen/scrcpy:panel
+noctalia msg panel-toggle omen/scrcpy:quick
 ```
 
 ### Pairing a phone over wifi
@@ -118,8 +120,14 @@ noctalia msg plugin omen/scrcpy:manager all stop-last
 noctalia msg plugin omen/scrcpy:manager all start-recording
 ```
 
-Keybinds can call these directly. `toggle-panel` and `ping` are wired in the current scaffold; the
-remaining events are implemented in later sessions.
+Keybinds can call these directly. `toggle-panel` opens the main panel. The panel and bar also use an
+in-process command bus (`noctalia.state`), so no extra process is spawned for UI actions.
+
+## Performance notes
+
+- Discovery polls adb only while the main panel is open; the service ticks once per second.
+- The service publishes plain state snapshots to the bar and panel; no polling of processes by the UI.
+- The argv builder and gating rules are pure modules, so the unit suite runs without a device.
 
 ## Notes
 

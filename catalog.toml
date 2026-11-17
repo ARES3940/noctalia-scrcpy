@@ -9,6 +9,9 @@ author = "omen"
 license = "MIT"
 icon = "device-mobile"
 description = "Control scrcpy over wireless ADB with presets, recording, camera, HID and multiple sessions."
+
+# The community-plugins catalog is generated from each plugin's manifest in CI;
+# this file is only used when this repo is added as a git source.
 deprecated = false
 plugin_api = 53
 tags = ["utility", "media", "hardware", "network"]
