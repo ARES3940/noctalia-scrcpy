@@ -1,17 +1,18 @@
 # Scrcpy Control
 
-Control [scrcpy](https://github.com/Genymobile/scrcpy) from Noctalia: start and stop screen mirroring,
-record the phone, stream a camera or a webcam, and use HID input — all over wireless ADB. The plugin is
-a controller and launcher. scrcpy draws its own native window; the panel never embeds video.
+Control [scrcpy](https://github.com/Genymobile/scrcpy) from Noctalia: mirror the phone inside an
+interactive embedded preview, or launch scrcpy in its own window; record, stream a camera or a webcam,
+and use HID input — all over wireless ADB. The plugin is a controller and launcher. Embedded mode
+feeds a V4L2 loopback and displays it with Noctalia's `ui.pixelStream`; no native scrcpy window opens.
 
 ## Plugin
 
 | Field | Value |
 | --- | --- |
 | ID | `omen/scrcpy` |
-| Version | 0.2.0 |
-| Plugin API | 53 or newer (Noctalia v5.5.0+) |
-| Entries | Service: `manager`; bar widget: `bar`; panels: `panel`, `quick`; shortcut: `toggle` |
+| Version | 0.3.0 |
+| Plugin API | 53 or newer (Noctalia v5.5.0+); pixel stream API 40+ |
+| Entries | Service: `manager`; bar widget: `bar`; panels: `panel`, `screen`, `quick`; shortcut: `toggle` |
 | License | MIT |
 
 ## Requirements
@@ -19,9 +20,10 @@ a controller and launcher. scrcpy draws its own native window; the panel never e
 - **adb** — Android Debug Bridge (package `android-tools` on Arch/CachyOS).
 - **scrcpy** — version 5.0.1 or newer is recommended; every flag listed below was verified against 5.0.1.
 - Wireless debugging enabled on the phone, and the computer authorised once on the phone.
-- Optional: `v4l2loopback` loaded with a writable `/dev/videoN` node for webcam output (the plugin does
-  not load kernel modules or use sudo).
-- No QML, Quickshell, Python, or additional runtime is used.
+- **Embedded preview only:** `python3`, `ffmpeg`, and `v4l2loopback` loaded with a writable,
+  unused `/dev/videoN` node (default `/dev/video10`). Native-window mirroring, recording and camera
+  need only adb and scrcpy.
+- The plugin does not load kernel modules, use sudo, or install packages. No QML or Quickshell is used.
 
 ## Usage
 
@@ -37,8 +39,23 @@ a controller and launcher. scrcpy draws its own native window; the panel never e
 
 ```sh
 noctalia msg panel-open omen/scrcpy:panel
+noctalia msg panel-open omen/scrcpy:screen
 noctalia msg panel-open omen/scrcpy:quick
 ```
+
+### Embedded preview
+
+`START MIRROR` now starts an **embedded** session: scrcpy writes the phone display to the configured
+V4L2 loopback with `--v4l2-sink=… --no-window --v4l2-buffer=0`, and a small Python companion serves
+those frames to the `screen` panel. Taps, drags, typing and Back / Home / Recents go back to the phone
+over `adb shell input`. The preview panel opens automatically when an embedded mirror starts; closing
+it stops the preview and its mirror. Use `WINDOW` (or `OPEN IN WINDOW` in the preview panel) for the
+traditional native scrcpy window.
+
+The preview is tied to one loopback node. It cannot run at the same time as `WEBCAM` mode or another
+plugin using the same `/dev/videoN` (for example AndroidConnect). The companion is written for this
+plugin from the public Noctalia pixel-stream protocol; AndroidConnect's GPL code is neither copied
+nor linked.
 
 ### Main panel
 
@@ -46,7 +63,7 @@ The panel is 420 × 600 and has three tabs:
 
 | Tab | What it holds |
 | --- | --- |
-| **Control** | Selected phone, `START MIRROR`, `REC`, `CAMERA`, `WEBCAM`, record-while-mirroring, restart last session, live sessions with elapsed time and stop, presets, and a two-line summary of the session defaults |
+| **Control** | Selected phone, `START MIRROR` (embedded), `REC`, `CAMERA`, `WEBCAM`, `WINDOW`, record-while-mirroring, restart last session, live sessions with elapsed time and stop, presets, and a two-line summary of the session defaults |
 | **Devices** | Connected devices with `USE` / `CONNECT` / `MIRROR`, the pairing form, a manual `ip:port` connect, and remembered devices with forget |
 | **Settings** | Video, audio, recording, display, input and screen, camera and webcam, window options, an **Advanced** disclosure (buffers, encoder, virtual-display DPI, OTG, window size, orientation), the exact command preview, and reset-overrides |
 
@@ -97,6 +114,7 @@ Every feature is implemented by passing a flag to scrcpy. The plugin never reimp
 | Clipboard | default sync, `--no-clipboard-autosync` | yes |
 | Camera | `--video-source=camera`, `--camera-facing`, `--camera-size`, `--camera-id` | yes (Android 12+) |
 | Webcam | `--v4l2-sink=/dev/videoN` | yes (needs v4l2loopback) |
+| Embedded preview | `--v4l2-sink`, `--no-window`, `--v4l2-buffer=0` + pixel-stream companion | yes (needs v4l2loopback, python3, ffmpeg) |
 | HID | `--keyboard=uhid`, `--mouse=uhid`, `--gamepad=uhid` | yes |
 | OTG / AOA | `--otg`, `--keyboard=aoa`, `--mouse=aoa` | **no, USB only** |
 
@@ -135,6 +153,8 @@ per-device overrides in the plugin data directory. Values with a unit: `video_bi
 | `camera_size` | `""` | `camera_id` | `""` |
 | `camera_fps` | `0` | `v4l2_enabled` | `false` |
 | `v4l2_sink` | `/dev/video10` | `keyboard_mode` | `disabled` |
+| `preview_width` | `320` | `preview_height` | `640` |
+| `preview_fps` | `30` | | |
 | `mouse_mode` | `disabled` | `gamepad_mode` | `disabled` |
 | `otg` | `false` | `always_on_top` | `false` |
 | `fullscreen` | `false` | `window_title` | `noctalia-scrcpy` |
@@ -150,6 +170,10 @@ noctalia msg plugin omen/scrcpy:manager all toggle-panel
 noctalia msg plugin omen/scrcpy:manager all refresh
 noctalia msg plugin omen/scrcpy:manager all start-last
 noctalia msg plugin omen/scrcpy:manager all stop-last
+noctalia msg plugin omen/scrcpy:manager all start-embedded
+noctalia msg plugin omen/scrcpy:manager all stop-preview
+noctalia msg plugin omen/scrcpy:manager all preview-tap '{"x":0.5,"y":0.5}'
+noctalia msg plugin omen/scrcpy:manager all preview-key '{"key":"back"}'
 noctalia msg plugin omen/scrcpy:manager all start-recording
 noctalia msg plugin omen/scrcpy:manager all start '{"kind":"mirror","extras":{"video_source":"camera"}}'
 noctalia msg plugin omen/scrcpy:manager all stop '{"id":"<session-id>"}'
@@ -175,8 +199,12 @@ in-process command bus (`noctalia.state`), so no extra process is spawned for UI
   owned by this plugin are stopped. A Noctalia `SIGKILL` cannot run cleanup; in that rare case use
   `pkill -f noctalia-scrcpy` to clear leftovers.
 - **Files:** overrides, known devices, the current selection, PID files and per-session logs live in
-  Noctalia's per-plugin data directory. Pairing codes are passed as command arguments and are never
-  stored.
+  Noctalia's per-plugin data directory. The embedded preview adds a private `preview-<id>.sock`,
+  `.pid` and `.log` there; the socket is removed when the companion exits. Pairing codes are passed
+  as command arguments and are never stored.
+- **Embedded processes:** the manager owns both the scrcpy session and `preview.py`. Companion frames
+  go straight from ffmpeg through a sealed shared-memory buffer to the shell; no pixels pass through
+  Lua. A dead companion is reported in the preview panel and stops its mirror.
 - **Network:** `adb pair/connect/mdns` talks only to the local phone. No cloud calls, analytics or
   remote downloads. Discovery polls adb only while the panel is open.
 - **Multiple sessions:** each launch is an independent process that can be stopped separately, for
@@ -187,7 +215,8 @@ in-process command bus (`noctalia.state`), so no extra process is spawned for UI
 
 ### Optional Hyprland window rules (documented, not applied)
 
-The plugin never edits your Hyprland config. To float and place the scrcpy window, add rules like these
+The plugin never edits your Hyprland config. The embedded preview needs no window rules; for the
+optional native-window mode, to float and place the scrcpy window add rules like these
 to `~/.config/hypr/hyprland.conf` and reload Hyprland:
 
 ```conf

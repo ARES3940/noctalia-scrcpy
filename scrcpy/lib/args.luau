@@ -127,8 +127,10 @@ function M.build(opts)
 
     if enabled(s.v4l2_enabled, false) then
         add("--v4l2-sink=" .. str(s.v4l2_sink, "/dev/video10"))
-        -- A webcam sink does not need a local video window.
+        -- A V4L2 sink is the preview target; no native window is wanted.
         add("--no-window")
+        -- Do not buffer frames in v4l2sink: the panel wants the latest frame.
+        add("--v4l2-buffer=0")
     end
 
     -- HID ------------------------------------------------------------------

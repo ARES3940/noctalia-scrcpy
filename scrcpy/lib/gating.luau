@@ -42,6 +42,13 @@ function M.evaluate(caps)
         blocked.v4l2_sink = "No writable V4L2 loopback device"
     end
 
+    -- The embedded preview additionally needs the companion toolchain.
+    if caps.python3 == false or caps.ffmpeg == false then
+        blocked.embedded = "Embedded preview needs python3 and ffmpeg"
+    elseif caps.v4l2Writable ~= true then
+        blocked.embedded = "Embedded preview needs a writable V4L2 loopback device"
+    end
+
     -- Android version floors reported by scrcpy --help.
     if sdk > 0 and sdk < 29 then
         blocked.max_fps = "Frame-rate limit needs Android 10+"
@@ -93,6 +100,11 @@ function M.validate(settings, caps, serial)
 
     if settings.v4l2_enabled == true and caps.v4l2Writable ~= true then
         add("No writable V4L2 loopback device")
+    end
+    if settings.embedded == true then
+        if caps.python3 == false or caps.ffmpeg == false then
+            add("Embedded preview needs python3 and ffmpeg")
+        end
     end
 
     local sdk = tonumber(caps.androidSdk) or 0

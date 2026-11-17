@@ -1,13 +1,13 @@
 id = "omen/scrcpy"
 name = "Scrcpy Control"
-version = "0.2.0"
+version = "0.3.0"
 plugin_api = 53
 author = "omen"
 license = "MIT"
 icon = "device-mobile"
 description = "Control scrcpy over wireless ADB with presets, recording, camera, HID and multiple sessions."
 tags = ["utility", "media", "hardware", "network"]
-dependencies = ["adb", "scrcpy"]
+dependencies = ["adb", "scrcpy", "python3", "ffmpeg"]
 
 [[service]]
 id = "manager"
@@ -22,6 +22,17 @@ id = "panel"
 entry = "panel.luau"
 width = 420
 height = 600
+placement = "floating"
+position = "auto"
+open_near_click = true
+layer = "follow"
+
+[[panel]]
+id = "screen"
+entry = "screen.luau"
+width = 680
+height = "content"
+max_height = 900
 placement = "floating"
 position = "auto"
 open_near_click = true
@@ -346,6 +357,34 @@ label_key = "settings.v4l2_sink.label"
 description_key = "settings.v4l2_sink.description"
 default = "/dev/video10"
 advanced = true
+
+# ── Embedded preview ─────────────────────────────────────────────────────────
+[[setting]]
+key = "preview_width"
+type = "int"
+label_key = "settings.preview_width.label"
+description_key = "settings.preview_width.description"
+default = 320
+min = 160
+max = 480
+
+[[setting]]
+key = "preview_height"
+type = "int"
+label_key = "settings.preview_height.label"
+description_key = "settings.preview_height.description"
+default = 640
+min = 320
+max = 720
+
+[[setting]]
+key = "preview_fps"
+type = "int"
+label_key = "settings.preview_fps.label"
+description_key = "settings.preview_fps.description"
+default = 30
+min = 1
+max = 60
 
 # ── HID ───────────────────────────────────────────────────────────────────────
 [[setting]]

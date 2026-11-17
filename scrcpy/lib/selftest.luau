@@ -166,6 +166,7 @@ function M.run()
     local v4l2 = build(with({ v4l2_enabled = true, v4l2_sink = "/dev/video9" }))
     check("v4l2 sink", contains(v4l2, "--v4l2-sink=/dev/video9"))
     check("v4l2 implies no window", contains(v4l2, "--no-window"))
+    check("v4l2 unbuffered", contains(v4l2, "--v4l2-buffer=0"))
 
     -- HID / OTG ------------------------------------------------------------
     local hid = build(with({ keyboard_mode = "uhid", mouse_mode = "sdk", gamepad_mode = "uhid", otg = true }))
@@ -249,6 +250,11 @@ function M.run()
     check("virtual display blocked below Android 14", old.new_display ~= nil)
     check("everything blocked without adb", G.evaluate(caps({ adb = false })).all ~= nil)
     check("missing device marked separately", G.evaluate(caps({ deviceSelected = false })).device ~= nil)
+    local fullCaps = caps({ python3 = true, ffmpeg = true })
+    check("embedded preview allowed with its toolchain", G.evaluate(fullCaps).embedded == nil)
+    check("embedded preview blocked without ffmpeg", G.evaluate(caps({ ffmpeg = false })).embedded ~= nil)
+    check("embedded preview blocked without loopback",
+        G.evaluate(caps({ python3 = true, ffmpeg = true, v4l2Writable = false })).embedded ~= nil)
 
     -- Launch validation -----------------------------------------------------
     local function vsettings(overrides)
