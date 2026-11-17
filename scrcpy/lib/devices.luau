@@ -108,4 +108,32 @@ function M.label(device)
     return device.serial
 end
 
+function M.isReady(device)
+    return device ~= nil and device.state == "device"
+end
+
+--- Exact serial lookup.
+function M.find(devices, serial)
+    if type(serial) ~= "string" or serial == "" then return nil end
+    for _, device in ipairs(devices or {}) do
+        if device.serial == serial then return device end
+    end
+    return nil
+end
+
+--- The selected device when present, else the first ready one.
+-- With an explicit serial that is not in the list, returns nil: a stale
+-- selection must not silently launch on a different phone.
+function M.pick(devices, serial)
+    local firstReady
+    for _, device in ipairs(devices or {}) do
+        if serial ~= nil and serial ~= "" and device.serial == serial then
+            return device
+        end
+        if not firstReady and M.isReady(device) then firstReady = device end
+    end
+    if serial ~= nil and serial ~= "" then return nil end
+    return firstReady
+end
+
 return M

@@ -29,6 +29,8 @@ end
 --   settings = effective settings table,
 --   serial   = optional adb serial (overrides settings.device_serial),
 --   recordFile = optional explicit --record path,
+--   recordDir  = optional directory for a generated record filename; the
+--                caller expands "~" (this module never touches the shell),
 --   sessionId  = optional short id used in a generated record filename,
 -- }
 -- @return array of strings, starting with "scrcpy"
@@ -79,7 +81,7 @@ function M.build(opts)
         local format = str(s.record_format, "mp4")
         local file = str(opts.recordFile, "")
         if file == "" then
-            local dir = str(s.record_dir, "~/Videos"):gsub("/+$", "")
+            local dir = str(opts.recordDir, str(s.record_dir, "~/Videos")):gsub("/+$", "")
             file = dir .. "/scrcpy-" .. str(opts.sessionId, "1") .. "." .. format
         end
         add("--record=" .. file)
