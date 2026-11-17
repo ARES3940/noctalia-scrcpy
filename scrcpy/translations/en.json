@@ -53,8 +53,6 @@
   "settings.preview_height.description": "Height of the embedded preview in pixels.",
   "settings.preview_fps.label": "Preview FPS",
   "settings.preview_fps.description": "Frame-rate limit for the embedded preview companion.",
-  "settings.embedded_tune.label": "Tune embedded mirror",
-  "settings.embedded_tune.description": "Match the scrcpy stream to the preview size and frame rate for lower latency. Turn off to use the normal session settings.",
   "settings.keyboard_mode.label": "Keyboard mode",
   "settings.mouse_mode.label": "Mouse mode",
   "settings.gamepad_mode.label": "Gamepad mode",
