@@ -4,6 +4,7 @@ local S = require("./lib/shared.luau")
 local T = S.T
 local A = require("./lib/args.luau")
 local Devices = require("./lib/devices.luau")
+local Presets = require("./lib/presets.luau")
 
 local pairHost = ""
 local pairCode = ""
@@ -145,6 +146,26 @@ local function argsRow()
     })
 end
 
+local function presetRow()
+    local active = noctalia.state.get("activePreset") or "Default"
+    local children = { S.micro("PRESET " .. string.upper(active), T.color.accent) }
+    local buttons = {}
+    for _, name in ipairs(Presets.order) do
+        table.insert(buttons, ui.button({
+            text = string.upper(name),
+            variant = name == active and "primary" or "outline",
+            controlSize = "sm",
+            onClick = function() S.send("apply-preset", { preset = name }) end,
+        }))
+    end
+    table.insert(children, ui.row({ gap = 4, flexWrap = true }, buttons))
+    table.insert(children, ui.button({
+        text = "RESET DEFAULTS", variant = "ghost", controlSize = "sm",
+        onClick = function() S.send("reset-overrides") end,
+    }))
+    return S.card(children)
+end
+
 local function render()
     local devices = noctalia.state.get("devices") or {}
     local sessions = noctalia.state.get("sessions") or {}
@@ -183,6 +204,9 @@ local function render()
                 onClick = function() S.send("pair", { host = pairHost, code = pairCode }) end,
             }),
         }),
+
+        S.sectionRule(),
+        presetRow(),
 
         S.sectionRule(),
         S.micro("FEATURES"),
@@ -258,7 +282,7 @@ function onClose()
     S.send("panel-close")
 end
 
-for _, key in ipairs({ "devices", "sessions", "notice", "effective", "blocked", "hints", "capabilities" }) do
+for _, key in ipairs({ "devices", "sessions", "notice", "effective", "blocked", "hints", "capabilities", "activePreset" }) do
     noctalia.state.watch(key, render)
 end
 render()

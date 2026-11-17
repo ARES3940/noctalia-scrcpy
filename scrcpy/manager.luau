@@ -6,16 +6,19 @@ local PLUGIN = "omen/scrcpy"
 local A = require("./lib/args.luau")
 local Devices = require("./lib/devices.luau")
 local Gating = require("./lib/gating.luau")
+local Presets = require("./lib/presets.luau")
 local Settings = require("./lib/settings.luau")
 local Selftest = require("./lib/selftest.luau")
 
 local defaults = Settings.readAll()
 local dataDir = noctalia.pluginDataDir()
 local knownPath = dataDir and (dataDir .. "/known.json") or nil
+local overridesPath = dataDir and (dataDir .. "/overrides.json") or nil
 
 local sessions = {}
 local known = {}
 local overrides = {}
+local activePreset = "Default"
 local caps = {
     adb = false, scrcpy = false, wireless = true,
     androidSdk = 0, v4l2Writable = false, deviceSelected = false,
@@ -41,6 +44,7 @@ local function publish()
     noctalia.state.set("capabilities", caps)
     noctalia.state.set("blocked", blocked)
     noctalia.state.set("hints", hints)
+    noctalia.state.set("activePreset", activePreset)
 end
 
 local function selectedSerial()
@@ -89,6 +93,23 @@ local function saveKnown()
     if not knownPath then return end
     local encoded = noctalia.json.encode(known)
     if encoded then noctalia.writeFile(knownPath, encoded) end
+end
+
+local function loadOverrides()
+    if not overridesPath then return end
+    local raw = noctalia.readFile(overridesPath)
+    if not raw then return end
+    local decoded = noctalia.json.decode(raw)
+    if type(decoded) == "table" then
+        overrides = type(decoded.settings) == "table" and decoded.settings or {}
+        activePreset = tostring(decoded.preset or "Default")
+    end
+end
+
+local function saveOverrides()
+    if not overridesPath then return end
+    local encoded = noctalia.json.encode({ settings = overrides, preset = activePreset })
+    if encoded then noctalia.writeFile(overridesPath, encoded) end
 end
 
 local function afterDiscovery(deviceRows, mdnsRows)
@@ -378,10 +399,28 @@ local function dispatch(event, payload)
         local key = tostring(p.key or "")
         if key ~= "" then
             overrides[key] = p.value
+            activePreset = "Custom"
+            saveOverrides()
             publish()
         end
     elseif event == "set-overrides" then
         overrides = type(p.settings) == "table" and p.settings or {}
+        activePreset = tostring(p.preset or "Custom")
+        saveOverrides()
+        publish()
+    elseif event == "apply-preset" then
+        local name = tostring(p.preset or "Default")
+        overrides = {}
+        for key, value in pairs(Presets.get(name)) do overrides[key] = value end
+        activePreset = name
+        saveOverrides()
+        setNotice("Preset: " .. name)
+        publish()
+    elseif event == "reset-overrides" then
+        overrides = {}
+        activePreset = "Default"
+        saveOverrides()
+        setNotice("Defaults restored")
         publish()
     elseif event == "preview-args" then
         noctalia.state.set("argvPreview", A.build({ settings = effective() }))
@@ -422,6 +461,7 @@ function update()
 end
 
 loadKnown()
+loadOverrides()
 refreshCapabilities()
 local passed, failed, failures = Selftest.run()
 noctalia.log(string.format("%s: args self-test: %d passed, %d failed", PLUGIN, passed, failed))

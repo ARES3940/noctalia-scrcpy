@@ -199,6 +199,8 @@ function M.run()
     check("Webcam preset uses v4l2", contains(presetArgs("Webcam"), "--v4l2-sink=/dev/video10"))
     check("Record only preset records", contains(presetArgs("Record only"), "--record=~/Videos/scrcpy-1.mp4"))
     check("Record only preset hides window", contains(presetArgs("Record only"), "--no-window"))
+    check("all five presets declared", #P.order == 5 and P.presets[P.order[1]] ~= nil
+        and P.presets[P.order[5]] ~= nil)
 
     -- Device parsing / dedupe ---------------------------------------------
     local D = require("./devices.luau")
