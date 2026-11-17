@@ -54,6 +54,8 @@ class Server:
         self.server = None
         self.capture_thread = None
         self.serve_thread = None
+        self.latest_at = time.monotonic()
+        self.received = 0
 
     def start(self):
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -93,7 +95,9 @@ class Server:
                         break
                     with self.condition:
                         self.latest = pixels
+                        self.latest_at = time.monotonic()
                         self.version += 1
+                        self.received += 1
                         self.condition.notify_all()
                 try:
                     code = self.child.wait(timeout=2)
@@ -166,18 +170,21 @@ class Server:
                         buffers = [create_buffer(self.width, self.height) for _ in range(2)]
                     sent = -1
                     next_id = 0
+                    last_version = 0
+                    served, age_sum, stats_at = 0, 0.0, time.monotonic()
                     while not self.stopped.is_set():
                         if self.receive(client) != (2, 0):  # REQUEST
                             break
                         with self.condition:
                             self.condition.wait_for(
-                                lambda: self.stopped.is_set() or self.version > self.sent,
+                                lambda: self.stopped.is_set() or self.version > last_version,
                                 timeout=1.0,
                             )
                             if self.stopped.is_set():
                                 break
-                            self.sent = self.version
+                            last_version = self.version
                             pixels = self.latest
+                            frame_at = self.latest_at
                         fd, mapping = buffers[next_id]
                         mapping[:] = pixels
                         if sent != next_id:
@@ -187,6 +194,18 @@ class Server:
                                 break
                         if client.send(struct.pack("<II", 2, next_id)) != HEADER.size:
                             break
+                        served += 1
+                        age_sum += max(0.0, (time.monotonic() - frame_at) * 1000.0)
+                        now = time.monotonic()
+                        if now - stats_at >= 5.0:
+                            span = now - stats_at
+                            print(
+                                "scrcpy-preview: recv=%.1ffps served=%.1ffps age=%.0fms"
+                                % (self.received / span, served / span, age_sum / max(1, served)),
+                                file=sys.stderr, flush=True,
+                            )
+                            self.received = 0
+                            served, age_sum, stats_at = 0, 0.0, now
                         sent = next_id
                         next_id = 1 - next_id
         finally:
@@ -242,9 +261,11 @@ def main(argv):
 
     ffmpeg = [
         "ffmpeg", "-nostdin", "-loglevel", "error", "-threads", "1",
+        "-fflags", "+nobuffer", "-probesize", "32", "-analyzeduration", "0",
         "-f", "v4l2", "-framerate", str(fps), "-i", device,
-        "-vf", "scale=%d:%d:flags=bilinear,format=rgba" % (width, height),
-        "-an", "-f", "rawvideo", "-pix_fmt", "rgba", "pipe:1",
+        # fast_bilinear is enough for a live preview and cheaper than bicubic.
+        "-vf", "scale=%d:%d:flags=fast_bilinear,format=rgba" % (width, height),
+        "-an", "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "rgba", "pipe:1",
     ]
     server = Server(path, ffmpeg, width, height)
     try:

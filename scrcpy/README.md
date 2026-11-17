@@ -52,6 +52,14 @@ over `adb shell input`. The preview panel opens automatically when an embedded m
 it stops the preview and its mirror. Use `WINDOW` (or `OPEN IN WINDOW` in the preview panel) for the
 traditional native scrcpy window.
 
+With `embedded_tune` enabled (the default), the embedded session caps the scrcpy stream at the
+preview's pixel size and frame rate, disables client buffering (`--video-buffer=0`) and caps the bit
+rate at 6 Mbps. This avoids encoding and transmitting pixels the panel cannot show. Raise
+`preview_fps` to 60 for a smoother stream if the phone and Wi-Fi can sustain it, or turn tuning off to
+use the normal session settings. The ffmpeg reader uses unbuffered V4L2 input, `fast_bilinear`
+scaling and timestamp passthrough; the companion logs received/served FPS and frame age every 5 s to
+its `preview-<id>.log` for diagnosis.
+
 The preview is tied to one loopback node. It cannot run at the same time as `WEBCAM` mode or another
 plugin using the same `/dev/videoN` (for example AndroidConnect). The companion is written for this
 plugin from the public Noctalia pixel-stream protocol; AndroidConnect's GPL code is neither copied
@@ -154,7 +162,7 @@ per-device overrides in the plugin data directory. Values with a unit: `video_bi
 | `camera_fps` | `0` | `v4l2_enabled` | `false` |
 | `v4l2_sink` | `/dev/video10` | `keyboard_mode` | `disabled` |
 | `preview_width` | `320` | `preview_height` | `640` |
-| `preview_fps` | `30` | | |
+| `preview_fps` | `30` | `embedded_tune` | `true` |
 | `mouse_mode` | `disabled` | `gamepad_mode` | `disabled` |
 | `otg` | `false` | `always_on_top` | `false` |
 | `fullscreen` | `false` | `window_title` | `noctalia-scrcpy` |

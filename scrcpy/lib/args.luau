@@ -63,7 +63,13 @@ function M.build(opts)
     if encoder ~= "" then add("--video-encoder=" .. encoder) end
 
     local videoBuffer = num(s.video_buffer_ms, 0)
-    if videoBuffer > 0 then add("--video-buffer=" .. tostring(videoBuffer)) end
+    if videoBuffer > 0 then
+        add("--video-buffer=" .. tostring(videoBuffer))
+    elseif enabled(s.low_latency, false) then
+        -- Explicitly disable scrcpy's client-side buffering for the embedded
+        -- preview; the loopback and pixel stream add enough latency already.
+        add("--video-buffer=0")
+    end
 
     -- Audio ----------------------------------------------------------------
     if not enabled(s.audio_enabled, true) then
