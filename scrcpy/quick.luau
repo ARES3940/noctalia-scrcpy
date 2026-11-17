@@ -89,7 +89,7 @@ local function render()
             ui.button({
                 text = "REC",
                 glyph = "player-record",
-                variant = "outline",
+                variant = "default",
                 controlSize = "sm",
                 flexGrow = 1,
                 enabled = canLaunch,
@@ -99,7 +99,7 @@ local function render()
             ui.button({
                 text = "CAMERA",
                 glyph = "camera",
-                variant = "outline",
+                variant = "default",
                 controlSize = "sm",
                 flexGrow = 1,
                 enabled = canLaunch and cameraBlocked == nil,

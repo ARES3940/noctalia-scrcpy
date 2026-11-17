@@ -546,7 +546,7 @@ local function presetButton(st, name)
     return ui.button({
         key = "preset-" .. name,
         text = Presets.label(name),
-        variant = "outline",
+        variant = "default",
         controlSize = "sm",
         flexGrow = 1,
         selected = st.preset == name,
