@@ -167,6 +167,7 @@ function M.run()
     check("v4l2 sink", contains(v4l2, "--v4l2-sink=/dev/video9"))
     check("v4l2 implies no window", contains(v4l2, "--no-window"))
     check("v4l2 unbuffered", contains(v4l2, "--v4l2-buffer=0"))
+    check("low latency sets video buffer 0", contains(build(with({ low_latency = true })), "--video-buffer=0"))
 
     -- HID / OTG ------------------------------------------------------------
     local hid = build(with({ keyboard_mode = "uhid", mouse_mode = "sdk", gamepad_mode = "uhid", otg = true }))

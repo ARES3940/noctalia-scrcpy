@@ -13,7 +13,7 @@ local KEYS = {
     "clipboard_autosync", "show_touches", "no_control",
     "video_source", "camera_facing", "camera_size", "camera_id", "camera_fps",
     "v4l2_enabled", "v4l2_sink",
-    "preview_width", "preview_height", "preview_fps",
+    "preview_width", "preview_height", "preview_fps", "embedded_tune",
     "keyboard_mode", "mouse_mode", "gamepad_mode", "otg",
     "always_on_top", "fullscreen", "window_title", "window_width", "window_height",
     "display_id", "orientation",

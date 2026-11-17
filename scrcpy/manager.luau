@@ -522,6 +522,11 @@ local function previewSize()
     return w, h
 end
 
+local function previewFps()
+    local fps = math.floor(tonumber(effective().preview_fps) or 30)
+    return math.max(1, math.min(60, fps))
+end
+
 local function probeScreen(serial)
     if serial == nil or serial == "" then return end
     noctalia.runAsync({ "adb", "-s", serial, "shell", "wm", "size" }, function(result)
@@ -541,8 +546,7 @@ local function startPreviewCompanion(session)
         return false
     end
     local width, height = previewSize()
-    local fps = math.floor(tonumber(effective().preview_fps) or 30)
-    fps = math.max(1, math.min(60, fps))
+    local fps = previewFps()
     local stamp = session.id
     preview.socket = dataDir .. "/preview-" .. stamp .. ".sock"
     preview.pidPath = dataDir .. "/preview-" .. stamp .. ".pid"
@@ -651,13 +655,27 @@ local function startEmbedded(serial)
         return
     end
 
-    local sink = tostring(effective().v4l2_sink or "/dev/video10")
-    local session = startSession("mirror", {
+    local eff = effective()
+    local sink = tostring(eff.v4l2_sink or "/dev/video10")
+    local extras = {
         v4l2_enabled = true,
         v4l2_sink = sink,
         video_source = "display",
         embedded = true,
-    }, serial)
+        low_latency = true,
+    }
+    if eff.embedded_tune ~= false then
+        -- Encode only as many pixels as the preview can show, at the same
+        -- frame rate the companion requests. Extra pixels/fps only add
+        -- encode, decode and Wi-Fi latency.
+        local width, height = previewSize()
+        extras.max_size = math.max(width, height)
+        extras.max_fps = previewFps()
+        local bitrate = tonumber(eff.video_bit_rate) or 4000
+        extras.video_bit_rate = math.max(1000, math.min(bitrate, 6000))
+        extras.video_buffer_ms = 0
+    end
+    local session = startSession("mirror", extras, serial)
     if not session then return end
     session.embedded = true
     probeScreen(serial)
