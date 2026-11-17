@@ -1,0 +1,15 @@
+# Index for this source repo. The community-plugins repo generates its own
+# catalog.toml in CI; this one lets users add this repo as a git source.
+
+[[plugin]]
+id = "omen/scrcpy"
+name = "Scrcpy Control"
+version = "0.1.0"
+author = "omen"
+license = "MIT"
+icon = "device-mobile"
+description = "Control scrcpy over wireless ADB with presets, recording, camera, HID and multiple sessions."
+deprecated = false
+plugin_api = 53
+tags = ["utility", "media", "hardware", "network"]
+dependencies = ["adb", "scrcpy"]

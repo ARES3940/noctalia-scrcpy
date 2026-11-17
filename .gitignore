@@ -1,0 +1,7 @@
+# Editor / luau-lsp snapshot (download from official-plugins, do not commit)
+noctalia.d.luau
+
+# Python / validation venvs
+.venv/
+__pycache__/
+*.pyc

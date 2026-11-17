@@ -1,0 +1,441 @@
+id = "omen/scrcpy"
+name = "Scrcpy Control"
+version = "0.1.0"
+plugin_api = 53
+author = "omen"
+license = "MIT"
+icon = "device-mobile"
+description = "Control scrcpy over wireless ADB with presets, recording, camera, HID and multiple sessions."
+tags = ["utility", "media", "hardware", "network"]
+dependencies = ["adb", "scrcpy"]
+
+[[service]]
+id = "manager"
+entry = "manager.luau"
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 420
+height = "content"
+max_height = 640
+placement = "floating"
+position = "auto"
+open_near_click = true
+layer = "follow"
+
+[[shortcut]]
+id = "toggle"
+entry = "shortcut.luau"
+
+# ── Connection ────────────────────────────────────────────────────────────────
+[[setting]]
+key = "device_serial"
+type = "string"
+label_key = "settings.device_serial.label"
+description_key = "settings.device_serial.description"
+default = ""
+
+# ── Video ─────────────────────────────────────────────────────────────────────
+[[setting]]
+key = "max_size"
+type = "int"
+label_key = "settings.max_size.label"
+description_key = "settings.max_size.description"
+default = 1024
+min = 240
+max = 4096
+
+[[setting]]
+key = "video_bit_rate"
+type = "int"
+label_key = "settings.video_bit_rate.label"
+description_key = "settings.video_bit_rate.description"
+default = 8000
+min = 100
+max = 20000
+
+[[setting]]
+key = "max_fps"
+type = "int"
+label_key = "settings.max_fps.label"
+default = 60
+min = 1
+max = 120
+
+[[setting]]
+key = "video_codec"
+type = "select"
+label_key = "settings.video_codec.label"
+default = "h264"
+options = [
+    { value = "h264", label_key = "settings.option.h264.label" },
+    { value = "h265", label_key = "settings.option.h265.label" },
+    { value = "av1", label_key = "settings.option.av1.label" },
+    { value = "vp8", label_key = "settings.option.vp8.label" },
+    { value = "vp9", label_key = "settings.option.vp9.label" },
+]
+
+[[setting]]
+key = "video_encoder"
+type = "string"
+label_key = "settings.video_encoder.label"
+description_key = "settings.video_encoder.description"
+default = ""
+advanced = true
+
+[[setting]]
+key = "video_buffer_ms"
+type = "int"
+label_key = "settings.video_buffer_ms.label"
+description_key = "settings.video_buffer_ms.description"
+default = 0
+min = 0
+max = 5000
+advanced = true
+
+# ── Audio ─────────────────────────────────────────────────────────────────────
+[[setting]]
+key = "audio_enabled"
+type = "bool"
+label_key = "settings.audio_enabled.label"
+default = true
+
+[[setting]]
+key = "audio_source"
+type = "select"
+label_key = "settings.audio_source.label"
+default = "output"
+options = [
+    { value = "output", label_key = "settings.option.output.label" },
+    { value = "playback", label_key = "settings.option.playback.label" },
+    { value = "mic", label_key = "settings.option.mic.label" },
+    { value = "mic-unprocessed", label_key = "settings.option.mic-unprocessed.label" },
+    { value = "mic-camcorder", label_key = "settings.option.mic-camcorder.label" },
+    { value = "mic-voice-recognition", label_key = "settings.option.mic-voice-recognition.label" },
+    { value = "mic-voice-communication", label_key = "settings.option.mic-voice-communication.label" },
+    { value = "voice-call", label_key = "settings.option.voice-call.label" },
+    { value = "voice-call-uplink", label_key = "settings.option.voice-call-uplink.label" },
+    { value = "voice-call-downlink", label_key = "settings.option.voice-call-downlink.label" },
+    { value = "mic-performance", label_key = "settings.option.mic-performance.label" },
+    { value = "voice-performance", label_key = "settings.option.voice-performance.label" },
+]
+
+[[setting]]
+key = "audio_codec"
+type = "select"
+label_key = "settings.audio_codec.label"
+default = "opus"
+options = [
+    { value = "opus", label_key = "settings.option.opus.label" },
+    { value = "aac", label_key = "settings.option.aac.label" },
+    { value = "flac", label_key = "settings.option.flac.label" },
+    { value = "raw", label_key = "settings.option.raw.label" },
+]
+
+[[setting]]
+key = "audio_bit_rate"
+type = "int"
+label_key = "settings.audio_bit_rate.label"
+description_key = "settings.audio_bit_rate.description"
+default = 128
+min = 8
+max = 512
+
+[[setting]]
+key = "audio_buffer_ms"
+type = "int"
+label_key = "settings.audio_buffer_ms.label"
+default = 50
+min = 0
+max = 5000
+advanced = true
+
+# ── Recording ─────────────────────────────────────────────────────────────────
+[[setting]]
+key = "record_enabled"
+type = "bool"
+label_key = "settings.record_enabled.label"
+default = false
+
+[[setting]]
+key = "record_format"
+type = "select"
+label_key = "settings.record_format.label"
+default = "mp4"
+options = [
+    { value = "mp4", label_key = "settings.option.mp4.label" },
+    { value = "mkv", label_key = "settings.option.mkv.label" },
+    { value = "m4a", label_key = "settings.option.m4a.label" },
+    { value = "mka", label_key = "settings.option.mka.label" },
+    { value = "opus", label_key = "settings.option.opus.label" },
+    { value = "aac", label_key = "settings.option.aac.label" },
+    { value = "flac", label_key = "settings.option.flac.label" },
+    { value = "wav", label_key = "settings.option.wav.label" },
+]
+
+[[setting]]
+key = "record_dir"
+type = "folder"
+label_key = "settings.record_dir.label"
+default = "~/Videos"
+
+[[setting]]
+key = "record_only"
+type = "bool"
+label_key = "settings.record_only.label"
+description_key = "settings.record_only.description"
+default = false
+
+# ── Virtual display ───────────────────────────────────────────────────────────
+[[setting]]
+key = "new_display"
+type = "bool"
+label_key = "settings.new_display.label"
+description_key = "settings.new_display.description"
+default = false
+
+[[setting]]
+key = "new_display_size"
+type = "string"
+label_key = "settings.new_display_size.label"
+default = "1920x1080"
+
+[[setting]]
+key = "new_display_dpi"
+type = "int"
+label_key = "settings.new_display_dpi.label"
+default = 240
+min = 72
+max = 640
+advanced = true
+
+[[setting]]
+key = "vd_no_system_decorations"
+type = "bool"
+label_key = "settings.vd_no_system_decorations.label"
+default = false
+advanced = true
+
+[[setting]]
+key = "start_app"
+type = "string"
+label_key = "settings.start_app.label"
+description_key = "settings.start_app.description"
+default = ""
+
+# ── Screen / input ────────────────────────────────────────────────────────────
+[[setting]]
+key = "turn_screen_off"
+type = "bool"
+label_key = "settings.turn_screen_off.label"
+default = false
+
+[[setting]]
+key = "stay_awake"
+type = "bool"
+label_key = "settings.stay_awake.label"
+default = true
+
+[[setting]]
+key = "power_off_on_close"
+type = "bool"
+label_key = "settings.power_off_on_close.label"
+default = false
+
+[[setting]]
+key = "screen_off_timeout"
+type = "int"
+label_key = "settings.screen_off_timeout.label"
+description_key = "settings.screen_off_timeout.description"
+default = 0
+min = 0
+max = 3600
+advanced = true
+
+[[setting]]
+key = "clipboard_autosync"
+type = "bool"
+label_key = "settings.clipboard_autosync.label"
+default = true
+
+[[setting]]
+key = "show_touches"
+type = "bool"
+label_key = "settings.show_touches.label"
+default = false
+advanced = true
+
+[[setting]]
+key = "no_control"
+type = "bool"
+label_key = "settings.no_control.label"
+default = false
+advanced = true
+
+# ── Camera / webcam ───────────────────────────────────────────────────────────
+[[setting]]
+key = "video_source"
+type = "select"
+label_key = "settings.video_source.label"
+default = "display"
+options = [
+    { value = "display", label_key = "settings.option.display.label" },
+    { value = "camera", label_key = "settings.option.camera.label" },
+]
+
+[[setting]]
+key = "camera_facing"
+type = "select"
+label_key = "settings.camera_facing.label"
+default = "back"
+options = [
+    { value = "front", label_key = "settings.option.front.label" },
+    { value = "back", label_key = "settings.option.back.label" },
+    { value = "external", label_key = "settings.option.external.label" },
+]
+
+[[setting]]
+key = "camera_size"
+type = "string"
+label_key = "settings.camera_size.label"
+default = ""
+
+[[setting]]
+key = "camera_id"
+type = "string"
+label_key = "settings.camera_id.label"
+default = ""
+advanced = true
+
+[[setting]]
+key = "camera_fps"
+type = "int"
+label_key = "settings.camera_fps.label"
+description_key = "settings.camera_fps.description"
+default = 0
+min = 0
+max = 120
+advanced = true
+
+[[setting]]
+key = "v4l2_enabled"
+type = "bool"
+label_key = "settings.v4l2_enabled.label"
+description_key = "settings.v4l2_enabled.description"
+default = false
+
+[[setting]]
+key = "v4l2_sink"
+type = "string"
+label_key = "settings.v4l2_sink.label"
+description_key = "settings.v4l2_sink.description"
+default = "/dev/video10"
+advanced = true
+
+# ── HID ───────────────────────────────────────────────────────────────────────
+[[setting]]
+key = "keyboard_mode"
+type = "select"
+label_key = "settings.keyboard_mode.label"
+default = "disabled"
+options = [
+    { value = "disabled", label_key = "settings.option.disabled.label" },
+    { value = "sdk", label_key = "settings.option.sdk.label" },
+    { value = "uhid", label_key = "settings.option.uhid.label" },
+    { value = "aoa", label_key = "settings.option.aoa.label" },
+]
+
+[[setting]]
+key = "mouse_mode"
+type = "select"
+label_key = "settings.mouse_mode.label"
+default = "disabled"
+options = [
+    { value = "disabled", label_key = "settings.option.disabled.label" },
+    { value = "sdk", label_key = "settings.option.sdk.label" },
+    { value = "uhid", label_key = "settings.option.uhid.label" },
+    { value = "aoa", label_key = "settings.option.aoa.label" },
+]
+
+[[setting]]
+key = "gamepad_mode"
+type = "select"
+label_key = "settings.gamepad_mode.label"
+default = "disabled"
+options = [
+    { value = "disabled", label_key = "settings.option.disabled.label" },
+    { value = "uhid", label_key = "settings.option.uhid.label" },
+    { value = "aoa", label_key = "settings.option.aoa.label" },
+]
+
+[[setting]]
+key = "otg"
+type = "bool"
+label_key = "settings.otg.label"
+description_key = "settings.otg.description"
+default = false
+
+# ── Window ────────────────────────────────────────────────────────────────────
+[[setting]]
+key = "always_on_top"
+type = "bool"
+label_key = "settings.always_on_top.label"
+default = false
+
+[[setting]]
+key = "fullscreen"
+type = "bool"
+label_key = "settings.fullscreen.label"
+default = false
+
+[[setting]]
+key = "window_title"
+type = "string"
+label_key = "settings.window_title.label"
+description_key = "settings.window_title.description"
+default = "noctalia-scrcpy"
+
+[[setting]]
+key = "window_width"
+type = "int"
+label_key = "settings.window_width.label"
+default = 0
+min = 0
+max = 4096
+advanced = true
+
+[[setting]]
+key = "window_height"
+type = "int"
+label_key = "settings.window_height.label"
+default = 0
+min = 0
+max = 4096
+advanced = true
+
+[[setting]]
+key = "display_id"
+type = "int"
+label_key = "settings.display_id.label"
+default = 0
+min = 0
+max = 16
+advanced = true
+
+[[setting]]
+key = "orientation"
+type = "select"
+label_key = "settings.orientation.label"
+default = "0"
+options = [
+    { value = "0", label_key = "settings.option.0.label" },
+    { value = "90", label_key = "settings.option.90.label" },
+    { value = "180", label_key = "settings.option.180.label" },
+    { value = "270", label_key = "settings.option.270.label" },
+]
+advanced = true
