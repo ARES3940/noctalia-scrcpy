@@ -222,6 +222,27 @@ function M.run()
     check("prefers ip:port serial", merged[1].serial == "192.168.0.11:38377")
     check("attaches endpoint from mdns", merged[1].endpoint == "192.168.0.11:38377")
 
+    -- Capability gating ----------------------------------------------------
+    local G = require("./gating.luau")
+    local function caps(overrides)
+        local c = { adb = true, scrcpy = true, wireless = false, androidSdk = 37,
+            v4l2Writable = true, deviceSelected = true }
+        for k, v in pairs(overrides or {}) do c[k] = v end
+        return c
+    end
+    local capable, hints = G.evaluate(caps())
+    check("nothing blocked on a capable USB device", next(capable) == nil and next(hints) == nil)
+    local wifiBlocked, wifiHints = G.evaluate(caps({ wireless = true }))
+    check("OTG blocked over wifi", wifiBlocked.otg ~= nil)
+    check("AOA hint over wifi", wifiHints.keyboard_mode ~= nil)
+    check("UHID still allowed over wifi", wifiBlocked.keyboard_mode == nil)
+    check("V4L2 blocked without loopback", G.evaluate(caps({ v4l2Writable = false })).v4l2_enabled ~= nil)
+    local old = G.evaluate(caps({ androidSdk = 28 }))
+    check("max fps blocked below Android 10", old.max_fps ~= nil)
+    check("camera blocked below Android 12", old.video_source ~= nil)
+    check("virtual display blocked below Android 14", old.new_display ~= nil)
+    check("everything blocked without adb", G.evaluate(caps({ adb = false })).all ~= nil)
+
     return passed, failed, failures
 end
 

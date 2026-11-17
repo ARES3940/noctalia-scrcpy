@@ -5,6 +5,7 @@
 local PLUGIN = "omen/scrcpy"
 local A = require("./lib/args.luau")
 local Devices = require("./lib/devices.luau")
+local Gating = require("./lib/gating.luau")
 local Settings = require("./lib/settings.luau")
 local Selftest = require("./lib/selftest.luau")
 
@@ -14,6 +15,11 @@ local knownPath = dataDir and (dataDir .. "/known.json") or nil
 
 local sessions = {}
 local known = {}
+local overrides = {}
+local caps = {
+    adb = false, scrcpy = false, wireless = true,
+    androidSdk = 0, v4l2Writable = false, deviceSelected = false,
+}
 local panelOpen = false
 local discovering = false
 local lastDiscover = 0
@@ -22,10 +28,49 @@ local DISCOVER_INTERVAL_MS = 3000
 local EXIT_GRACE_MS = 10000
 local KILL_GRACE_MS = 2000
 
+local function effective()
+    return Settings.merge(defaults, overrides)
+end
+
 local function publish()
+    local blocked, hints = Gating.evaluate(caps)
     noctalia.state.set("sessions", sessions)
     noctalia.state.set("known", known)
     noctalia.state.set("panelOpen", panelOpen)
+    noctalia.state.set("effective", effective())
+    noctalia.state.set("capabilities", caps)
+    noctalia.state.set("blocked", blocked)
+    noctalia.state.set("hints", hints)
+end
+
+local function selectedSerial()
+    if lastSpec and lastSpec.serial and lastSpec.serial ~= "" then return lastSpec.serial end
+    for _, device in ipairs(noctalia.state.get("devices") or {}) do
+        if device.state == "device" then return device.serial end
+    end
+    return tostring(defaults.device_serial or "")
+end
+
+local function refreshCapabilities()
+    caps.adb = noctalia.commandExists("adb")
+    caps.scrcpy = noctalia.commandExists("scrcpy")
+    local serial = selectedSerial()
+    caps.deviceSelected = serial ~= ""
+    caps.wireless = Devices.isWireless(serial)
+
+    local v4l2Path = tostring(effective().v4l2_sink or "/dev/video10")
+    noctalia.runAsync({ "sh", "-c", 'test -w "$1"', "sh", v4l2Path }, function(result)
+        caps.v4l2Writable = result.exitCode == 0
+        publish()
+    end)
+
+    if caps.adb and serial ~= "" then
+        noctalia.runAsync({ "adb", "-s", serial, "shell", "getprop", "ro.build.version.sdk" }, function(result)
+            caps.androidSdk = tonumber(noctalia.string.trim(result.stdout)) or 0
+            publish()
+        end)
+    end
+    publish()
 end
 
 local function setNotice(text)
@@ -109,6 +154,7 @@ local function adbAction(argv, success)
             setNotice("adb failed: " .. (text ~= "" and text or ("exit " .. tostring(result.exitCode))))
         end
         discover()
+        refreshCapabilities()
     end) then setNotice("adb not found — install android-tools") end
 end
 
@@ -169,7 +215,7 @@ end
 
 local function startSession(kind, overrides, serial)
     local id = nextId()
-    local settings = Settings.merge(defaults, overrides)
+    local settings = effective()
     local recordFile = nil
     if kind == "record" then
         local dir = tostring(settings.record_dir or "~/Videos"):gsub("/+$", "")
@@ -285,6 +331,7 @@ local function dispatch(event, payload)
     elseif event == "panel-open" then
         panelOpen = true
         discover()
+        refreshCapabilities()
         publish()
     elseif event == "panel-close" then
         panelOpen = false
@@ -327,8 +374,17 @@ local function dispatch(event, payload)
     elseif event == "stop-last" then
         local session = lastActive()
         if session then stopSession(session, false) else setNotice("No active session") end
+    elseif event == "set-feature" then
+        local key = tostring(p.key or "")
+        if key ~= "" then
+            overrides[key] = p.value
+            publish()
+        end
+    elseif event == "set-overrides" then
+        overrides = type(p.settings) == "table" and p.settings or {}
+        publish()
     elseif event == "preview-args" then
-        noctalia.state.set("argvPreview", A.build({ settings = defaults }))
+        noctalia.state.set("argvPreview", A.build({ settings = effective() }))
     elseif event == "ping" then
         noctalia.state.set("lastPong", noctalia.nowMs())
     else
@@ -366,6 +422,7 @@ function update()
 end
 
 loadKnown()
+refreshCapabilities()
 local passed, failed, failures = Selftest.run()
 noctalia.log(string.format("%s: args self-test: %d passed, %d failed", PLUGIN, passed, failed))
 for _, name in ipairs(failures) do noctalia.log(PLUGIN .. ": FAIL " .. name) end
