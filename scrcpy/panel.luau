@@ -3,6 +3,7 @@
 -- Sessions 3-6 fill the device list, pairing form, toggles and presets.
 local S = require("./lib/shared.luau")
 local T = S.T
+local A = require("./lib/args.luau")
 
 local function deviceRows(devices)
     if type(devices) ~= "table" or #devices == 0 then
@@ -41,6 +42,27 @@ local function sessionRows(sessions)
     return rows
 end
 
+local function argsRow()
+    local defaults = noctalia.state.get("defaults") or {}
+    local argv = A.build({ settings = defaults })
+    local test = noctalia.state.get("selftest") or {}
+    return S.card({
+        ui.row({ gap = 6, align = "center" }, {
+            S.micro("ARGV PREVIEW"),
+            ui.spacer({ flexGrow = 1 }),
+            S.micro(tostring(test.passed or 0) .. " PASS / " .. tostring(test.failed or 0) .. " FAIL",
+                (test.failed or 0) > 0 and T.color.error or T.color.success),
+        }),
+        ui.label({
+            text = A.preview(argv),
+            fontSize = T.size.micro,
+            fontFamily = T.font.value,
+            color = T.color.muted,
+            maxLines = 3,
+        }),
+    })
+end
+
 local function render()
     local devices = noctalia.state.get("devices") or {}
     local sessions = noctalia.state.get("sessions") or {}
@@ -72,6 +94,18 @@ local function render()
         S.sectionRule(),
         S.micro(T.copy.sessions),
         ui.column({ gap = T.layout.rowGap }, sessionRows(sessions)),
+
+        S.sectionRule(),
+        argsRow(),
+        ui.button({
+            text = "COPY ARGS",
+            variant = "ghost",
+            controlSize = "sm",
+            onClick = function()
+                local argv = A.build({ settings = noctalia.state.get("defaults") or {} })
+                noctalia.copyToClipboard(A.preview(argv), "text/plain")
+            end,
+        }),
         S.errorLine(notice),
         S.sectionRule(),
         S.micro(T.copy.build, T.color.muted),
