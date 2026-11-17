@@ -200,6 +200,28 @@ function M.run()
     check("Record only preset records", contains(presetArgs("Record only"), "--record=~/Videos/scrcpy-1.mp4"))
     check("Record only preset hides window", contains(presetArgs("Record only"), "--no-window"))
 
+    -- Device parsing / dedupe ---------------------------------------------
+    local D = require("./devices.luau")
+    local sampleDevices = table.concat({
+        "List of devices attached",
+        "192.168.0.11:38377     device product:lavender model:Redmi_Note_7 device:lavender transport_id:3",
+        "adb-c297c4b2-xIfLEq._adb-tls-connect._tcp device product:lavender model:Redmi_Note_7 device:lavender transport_id:1",
+        "emulator-5554  unauthorized",
+        "",
+    }, "\n")
+    local parsed = D.parseDevices(sampleDevices)
+    check("parses three adb device rows", #parsed == 3)
+    check("parses device model", parsed[1].model == "Redmi Note 7")
+    check("detects ip wireless serial", D.isWireless("192.168.0.11:38377"))
+    check("detects mdns wireless serial", D.isWireless("adb-x._adb-tls-connect._tcp"))
+    check("detects usb serial", not D.isWireless("emulator-5554"))
+    local mdns = D.parseMdns("List of discovered mdns services\nadb-c297c4b2-xIfLEq\t_adb-tls-connect._tcp\t192.168.0.11:38377\n")
+    check("parses mdns endpoint", #mdns == 1 and mdns[1].host == "192.168.0.11" and mdns[1].port == "38377")
+    local merged = D.merge(parsed, mdns)
+    check("dedupes mDNS and ip serials", #merged == 2)
+    check("prefers ip:port serial", merged[1].serial == "192.168.0.11:38377")
+    check("attaches endpoint from mdns", merged[1].endpoint == "192.168.0.11:38377")
+
     return passed, failed, failures
 end
 
