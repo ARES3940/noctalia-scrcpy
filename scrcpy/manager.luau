@@ -591,6 +591,16 @@ end
 
 local function stopEmbedded(hard)
     local session = findSession(preview.sessionId)
+    if not session then
+        -- Be defensive: a preview whose companion died mid-stop can lose its
+        -- session id. Never leave an embedded scrcpy holding the loopback.
+        for _, candidate in ipairs(sessions) do
+            if candidate.embedded and candidate.state ~= "stopped" and candidate.state ~= "error" then
+                session = candidate
+                break
+            end
+        end
+    end
     stopPreviewCompanion(hard)
     if session then stopSession(session, hard) end
     if preview.pidPath then noctalia.removeFile(preview.pidPath) end
@@ -655,27 +665,17 @@ local function startEmbedded(serial)
         return
     end
 
-    local eff = effective()
-    local sink = tostring(eff.v4l2_sink or "/dev/video10")
-    local extras = {
+    local sink = tostring(effective().v4l2_sink or "/dev/video10")
+    -- Keep the user's resolution, frame rate, codec and bitrate. The only
+    -- embedded-specific change is explicit zero client buffering; the rest
+    -- of the pipeline is handled by ffmpeg/companion flags.
+    local session = startSession("mirror", {
         v4l2_enabled = true,
         v4l2_sink = sink,
         video_source = "display",
         embedded = true,
         low_latency = true,
-    }
-    if eff.embedded_tune ~= false then
-        -- Encode only as many pixels as the preview can show, at the same
-        -- frame rate the companion requests. Extra pixels/fps only add
-        -- encode, decode and Wi-Fi latency.
-        local width, height = previewSize()
-        extras.max_size = math.max(width, height)
-        extras.max_fps = previewFps()
-        local bitrate = tonumber(eff.video_bit_rate) or 4000
-        extras.video_bit_rate = math.max(1000, math.min(bitrate, 6000))
-        extras.video_buffer_ms = 0
-    end
-    local session = startSession("mirror", extras, serial)
+    }, serial)
     if not session then return end
     session.embedded = true
     probeScreen(serial)
