@@ -1,10 +1,14 @@
 --!nonstrict
--- omen/scrcpy service. Session 1 skeleton: owns state and the command bus.
+-- omen/scrcpy service: owns state, settings, the command bus and (later) processes.
 -- Session 3 adds adb discovery/pairing; Session 4 replaces launch/stop stubs
 -- with the real detached-process + PID-file manager.
 
 local PLUGIN = "omen/scrcpy"
+local A = require("./lib/args.luau")
+local Settings = require("./lib/settings.luau")
+local Selftest = require("./lib/selftest.luau")
 
+local defaults = Settings.readAll()
 local sessions = {}
 local devices = {}
 local panelOpen = false
@@ -27,6 +31,8 @@ local function dispatch(event, payload)
     elseif event == "refresh" or event == "pair-dialog" then
         -- Discovery and pairing land in Session 3.
         noctalia.state.set("notice", "Available in the next session")
+    elseif event == "preview-args" then
+        noctalia.state.set("argvPreview", A.build({ settings = defaults }))
     elseif event == "ping" then
         noctalia.state.set("lastPong", noctalia.nowMs())
     else
@@ -62,6 +68,15 @@ end
 function update()
     -- Session 3 polls adb here, but only while panelOpen is true.
 end
+
+-- Pure unit tests: no phone required, results go to the Noctalia log.
+local passed, failed, failures = Selftest.run()
+noctalia.log(string.format("%s: args self-test: %d passed, %d failed", PLUGIN, passed, failed))
+for _, name in ipairs(failures) do
+    noctalia.log(PLUGIN .. ": FAIL " .. name)
+end
+noctalia.state.set("defaults", defaults)
+noctalia.state.set("selftest", { passed = passed, failed = failed })
 
 noctalia.setUpdateInterval(1000)
 publish()
